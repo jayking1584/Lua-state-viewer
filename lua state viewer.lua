@@ -1,48 +1,40 @@
--- LUA STATE VIEWER FOR CLIENT EXECUTORS
--- Safe, optimized, and designed for client-side execution
-
-if not cloneref or not getrenv then
-    warn("Lua State Viewer requires a client executor environment")
-    return
-end
-
-local ExecutorViewer = {
+-- FIXED LUA STATE VIEWER FOR CLIENT EXECUTORS
+local FixedViewer = {
     _watchers = {},
     _events = {},
     _cache = {},
     _ids = setmetatable({}, {__mode = "k"}),
-    _safeMode = true -- Protect against detection
+    _safeMode = true
 }
 
 -- Safe environment references
-ExecutorViewer._env = getrenv()
-ExecutorViewer._g = ExecutorViewer._env._G
-ExecutorViewer._require = ExecutorViewer._env.require
+FixedViewer._env = getrenv and getrenv() or _G
+FixedViewer._g = FixedViewer._env._G
+FixedViewer._require = FixedViewer._env.require
 
 -- Safe object tracking
-function ExecutorViewer._getId(obj)
-    local id = ExecutorViewer._ids[obj]
+function FixedViewer._getId(obj)
+    local id = FixedViewer._ids[obj]
     if not id then
         local success, result = pcall(function()
-            return tostring(obj):match("0x(%x+)") or #ExecutorViewer._ids + 1
+            return tostring(obj):match("0x(%x+)") or #FixedViewer._ids + 1
         end)
-        id = success and result or #ExecutorViewer._ids + 1
-        ExecutorViewer._ids[obj] = id
+        id = success and result or #FixedViewer._ids + 1
+        FixedViewer._ids[obj] = id
     end
     return id
 end
 
 -- Safe table watching
-function ExecutorViewer.watchTable(tbl, name)
-    if ExecutorViewer._watchers[tbl] then return end
+function FixedViewer.watchTable(tbl, name)
+    if FixedViewer._watchers[tbl] then return end
     
     local watcher = {
         name = name or "table",
         last = {},
-        id = ExecutorViewer._getId(tbl)
+        id = FixedViewer._getId(tbl)
     }
     
-    -- Safe iteration
     local success = pcall(function()
         for k, v in pairs(tbl) do
             watcher.last[k] = v
@@ -50,17 +42,17 @@ function ExecutorViewer.watchTable(tbl, name)
     end)
     
     if success then
-        ExecutorViewer._watchers[tbl] = watcher
+        FixedViewer._watchers[tbl] = watcher
         return watcher.id
     end
     return nil
 end
 
 -- Safe change detection
-function ExecutorViewer.checkTableChanges()
+function FixedViewer.checkTableChanges()
     local changes = {}
     
-    for tbl, watcher in pairs(ExecutorViewer._watchers) do
+    for tbl, watcher in pairs(FixedViewer._watchers) do
         local success, result = pcall(function()
             if type(tbl) == "table" then
                 local current = {}
@@ -97,73 +89,42 @@ function ExecutorViewer.checkTableChanges()
 end
 
 -- Safe require monitoring
-function ExecutorViewer.monitorRequire()
-    if ExecutorViewer._hooks then return end
+function FixedViewer.monitorRequire()
+    if FixedViewer._hooks then return end
     
-    ExecutorViewer._hooks = {require = ExecutorViewer._require}
+    FixedViewer._hooks = {require = FixedViewer._require}
     
-    ExecutorViewer._env.require = function(modname)
+    FixedViewer._env.require = function(modname)
         local start = tick()
-        local result = ExecutorViewer._hooks.require(modname)
+        local result = FixedViewer._hooks.require(modname)
         local loadTime = tick() - start
         
-        table.insert(ExecutorViewer._events, {
-            "require", modname, loadTime, ExecutorViewer._getId(result)
+        table.insert(FixedViewer._events, {
+            "require", modname, loadTime, FixedViewer._getId(result)
         })
         
         if type(result) == "table" then
-            ExecutorViewer.watchTable(result, "module:" .. modname)
+            FixedViewer.watchTable(result, "module:" .. modname)
         end
         
         return result
     end
     
     -- Watch important tables
-    ExecutorViewer.watchTable(ExecutorViewer._g, "_G")
+    FixedViewer.watchTable(FixedViewer._g, "_G")
     
-    if ExecutorViewer._env.package and ExecutorViewer._env.package.loaded then
-        ExecutorViewer.watchTable(ExecutorViewer._env.package.loaded, "package.loaded")
+    if FixedViewer._env.package and FixedViewer._env.package.loaded then
+        FixedViewer.watchTable(FixedViewer._env.package.loaded, "package.loaded")
     end
 end
 
--- Safe function inspection
-function ExecutorViewer.inspectFunction(func, name)
-    local inspection = {
-        id = ExecutorViewer._getId(func),
-        name = name or "anonymous",
-        upvalues = {},
-        success = false
-    }
-    
-    local success, result = pcall(function()
-        local info = debug.getinfo(func, "nS")
-        inspection.source = info.source
-        inspection.linedefined = info.linedefined
-        inspection.what = info.what
-        
-        -- Get upvalues safely
-        local i = 1
-        while true do
-            local n, v = debug.getupvalue(func, i)
-            if not n then break end
-            inspection.upvalues[i] = {n, type(v), ExecutorViewer._getId(v)}
-            i = i + 1
-        end
-        
-        return true
-    end)
-    
-    inspection.success = success
-    return inspection
-end
-
 -- Safe events system
-function ExecutorViewer.getEvents(filter, limit)
+function FixedViewer.getEvents(filter, limit)
     local results = {}
     local count = 0
     
-    for i = #ExecutorViewer._events, 1, -1 do
-        local event = ExecutorViewer._events[i]
+    for i = #FixedViewer._events, 1, -1 do
+        local event = FixedViewer._events[i]
         if not filter or event[1] == filter then
             table.insert(results, event)
             count = count + 1
@@ -174,62 +135,40 @@ function ExecutorViewer.getEvents(filter, limit)
     return results
 end
 
--- Safe snapshots
-function ExecutorViewer.takeSnapshot(name)
-    local snap = {
-        time = tick(),
-        tables = {},
-        events = #ExecutorViewer._events
-    }
-    
-    for tbl, watcher in pairs(ExecutorViewer._watchers) do
-        if type(tbl) == "table" then
-            local id = ExecutorViewer._getId(tbl)
-            snap.tables[id] = {name = watcher.name, keys = {}}
-            for k in pairs(watcher.last) do
-                snap.tables[id].keys[k] = true
-            end
-        end
-    end
-    
-    ExecutorViewer._cache[name] = snap
-    return name
-end
-
 -- Safe statistics
-function ExecutorViewer.getStats()
+function FixedViewer.getStats()
     return {
-        objects = ExecutorViewer._count(ExecutorViewer._ids),
-        watchers = ExecutorViewer._count(ExecutorViewer._watchers),
-        events = #ExecutorViewer._events,
-        snapshots = ExecutorViewer._count(ExecutorViewer._cache)
+        objects = FixedViewer._count(FixedViewer._ids),
+        watchers = FixedViewer._count(FixedViewer._watchers),
+        events = #FixedViewer._events,
+        snapshots = FixedViewer._count(FixedViewer._cache)
     }
 end
 
-function ExecutorViewer._count(tbl)
+function FixedViewer._count(tbl)
     local n = 0
     for _ in pairs(tbl) do n = n + 1 end
     return n
 end
 
 -- Memory management
-function ExecutorViewer.cleanup()
-    if #ExecutorViewer._events > 100 then
+function FixedViewer.cleanup()
+    if #FixedViewer._events > 100 then
         for i = 1, 50 do
-            table.remove(ExecutorViewer._events, 1)
+            table.remove(FixedViewer._events, 1)
         end
     end
 end
 
--- CLIENT EXECUTOR GUI
-local ExecutorGUI = {
+-- FIXED GUI WITH PROPER ERROR HANDLING
+local FixedGUI = {
     _gui = nil,
     _currentView = "overview",
-    _viewer = ExecutorViewer
+    _viewer = FixedViewer,
+    _initialized = false
 }
 
--- Safe colors that won't stand out
-ExecutorGUI.Colors = {
+FixedGUI.Colors = {
     Background = Color3.fromRGB(40, 40, 40),
     Panel = Color3.fromRGB(50, 50, 50),
     Header = Color3.fromRGB(30, 30, 30),
@@ -241,15 +180,32 @@ ExecutorGUI.Colors = {
     Error = Color3.fromRGB(200, 100, 100)
 }
 
-function ExecutorGUI:Create()
+function FixedGUI:Create()
     if self._gui then return self._gui end
     
-    -- Create ScreenGui
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "DevTools"
-    screenGui.ResetOnSpawn = false
-    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    screenGui.Parent = game:GetService("CoreGui") -- Use CoreGui for executors
+    -- Safe GUI creation with error handling
+    local success, screenGui = pcall(function()
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "DevTools"
+        gui.ResetOnSpawn = false
+        gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        
+        -- Try CoreGui first, fallback to PlayerGui
+        local parent = game:GetService("CoreGui")
+        if not parent then
+            parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+        end
+        gui.Parent = parent
+        
+        return gui
+    end)
+    
+    if not success then
+        warn("Failed to create ScreenGui")
+        return nil
+    end
+    
+    local screenGui = screenGui
 
     -- Main Window
     local mainFrame = Instance.new("Frame")
@@ -274,7 +230,7 @@ function ExecutorGUI:Create()
     titleText.Size = UDim2.new(0, 150, 1, 0)
     titleText.Position = UDim2.new(0, 5, 0, 0)
     titleText.BackgroundTransparency = 1
-    titleText.Text = "Dev Tools"
+    titleText.Text = "Lua State Viewer"
     titleText.TextColor3 = self.Colors.Text
     titleText.TextSize = 12
     titleText.TextXAlignment = Enum.TextXAlignment.Left
@@ -331,10 +287,11 @@ function ExecutorGUI:Create()
     end)
 
     self._gui = screenGui
+    self._initialized = true
     return screenGui
 end
 
-function ExecutorGUI:MakeDraggable(dragHandle, mainFrame)
+function FixedGUI:MakeDraggable(dragHandle, mainFrame)
     local dragging = false
     local dragInput, dragStart, startPos
     
@@ -358,18 +315,23 @@ function ExecutorGUI:MakeDraggable(dragHandle, mainFrame)
         end
     end)
     
-    game:GetService("UserInputService").InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            mainFrame.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
+    local inputService = game:GetService("UserInputService")
+    if inputService then
+        inputService.InputChanged:Connect(function(input)
+            if input == dragInput and dragging then
+                local delta = input.Position - dragStart
+                mainFrame.Position = UDim2.new(
+                    startPos.X.Scale, startPos.X.Offset + delta.X,
+                    startPos.Y.Scale, startPos.Y.Offset + delta.Y
+                )
+            end
+        end)
+    end
 end
 
-function ExecutorGUI:CreateSidebar(parent)
+function FixedGUI:CreateSidebar(parent)
+    if not parent then return end
+    
     local sidebar = Instance.new("Frame")
     sidebar.Name = "Sidebar"
     sidebar.Size = UDim2.new(0, 120, 1, 0)
@@ -426,7 +388,9 @@ function ExecutorGUI:CreateSidebar(parent)
     self._statusLabel = statusText
 end
 
-function ExecutorGUI:CreateMainContent(parent)
+function FixedGUI:CreateMainContent(parent)
+    if not parent then return end
+    
     local content = Instance.new("Frame")
     content.Name = "MainContent"
     content.Size = UDim2.new(1, -120, 1, 0)
@@ -434,15 +398,24 @@ function ExecutorGUI:CreateMainContent(parent)
     content.BackgroundTransparency = 1
     content.Parent = parent
 
+    -- Store reference to main content
+    self._mainContent = content
+
     self:CreateOverviewView(content)
     self:CreateTablesView(content)
     self:CreateEventsView(content)
     self:CreateRequireView(content)
 
-    self:SwitchView("overview")
+    -- Safe initial view switch
+    task.spawn(function()
+        wait(0.1) -- Small delay to ensure everything is created
+        self:SwitchView("overview")
+    end)
 end
 
-function ExecutorGUI:CreateOverviewView(parent)
+function FixedGUI:CreateOverviewView(parent)
+    if not parent then return end
+    
     local overview = Instance.new("Frame")
     overview.Name = "Overview"
     overview.Size = UDim2.new(1, 0, 1, 0)
@@ -569,7 +542,9 @@ function ExecutorGUI:CreateOverviewView(parent)
     self._activityScroll = activityScroll
 end
 
-function ExecutorGUI:CreateTablesView(parent)
+function FixedGUI:CreateTablesView(parent)
+    if not parent then return end
+    
     local tablesView = Instance.new("Frame")
     tablesView.Name = "Tables"
     tablesView.Size = UDim2.new(1, 0, 1, 0)
@@ -629,7 +604,9 @@ function ExecutorGUI:CreateTablesView(parent)
     self._tablesScroll = scrollFrame
 end
 
-function ExecutorGUI:CreateEventsView(parent)
+function FixedGUI:CreateEventsView(parent)
+    if not parent then return end
+    
     local eventsView = Instance.new("Frame")
     eventsView.Name = "Events"
     eventsView.Size = UDim2.new(1, 0, 1, 0)
@@ -673,7 +650,9 @@ function ExecutorGUI:CreateEventsView(parent)
     self._eventsScroll = scrollFrame
 end
 
-function ExecutorGUI:CreateRequireView(parent)
+function FixedGUI:CreateRequireView(parent)
+    if not parent then return end
+    
     local requireView = Instance.new("Frame")
     requireView.Name = "Require"
     requireView.Size = UDim2.new(1, 0, 1, 0)
@@ -717,23 +696,32 @@ function ExecutorGUI:CreateRequireView(parent)
     self._requireScroll = scrollFrame
 end
 
-function ExecutorGUI:SwitchView(viewName)
-    local content = self._gui:FindFirstChild("MainWindow"):FindFirstChild("Content"):FindFirstChild("MainContent")
-    for _, child in ipairs(content:GetChildren()) do
+-- FIXED SwitchView function with proper error handling
+function FixedGUI:SwitchView(viewName)
+    if not self._initialized or not self._mainContent then
+        warn("GUI not fully initialized yet")
+        return
+    end
+    
+    -- Hide all views safely
+    for _, child in pairs(self._mainContent:GetChildren()) do
         if child:IsA("Frame") then
             child.Visible = false
         end
     end
     
-    local targetView = content:FindFirstChild(viewName:gsub("^%l", string.upper))
+    -- Show target view
+    local targetView = self._mainContent:FindFirstChild(viewName:gsub("^%l", string.upper))
     if targetView then
         targetView.Visible = true
         self._currentView = viewName
         self:RefreshCurrentView()
+    else
+        warn("View not found: " .. viewName)
     end
 end
 
-function ExecutorGUI:HandleControl(action)
+function FixedGUI:HandleControl(action)
     if action == "Start" then
         self._viewer.monitorRequire()
         self:UpdateStatus("Monitoring started", self.Colors.Success)
@@ -750,14 +738,16 @@ function ExecutorGUI:HandleControl(action)
     self:RefreshCurrentView()
 end
 
-function ExecutorGUI:UpdateStatus(message, color)
+function FixedGUI:UpdateStatus(message, color)
     if self._statusLabel then
         self._statusLabel.Text = message
         self._statusLabel.TextColor3 = color
     end
 end
 
-function ExecutorGUI:RefreshCurrentView()
+function FixedGUI:RefreshCurrentView()
+    if not self._initialized then return end
+    
     if self._currentView == "overview" then
         self:RefreshOverview()
     elseif self._currentView == "tables" then
@@ -769,7 +759,7 @@ function ExecutorGUI:RefreshCurrentView()
     end
 end
 
-function ExecutorGUI:RefreshOverview()
+function FixedGUI:RefreshOverview()
     local stats = self._viewer.getStats()
     
     if self._statObjects then
@@ -817,7 +807,7 @@ function ExecutorGUI:RefreshOverview()
     end
 end
 
-function ExecutorGUI:RefreshTablesView()
+function FixedGUI:RefreshTablesView()
     if self._tablesScroll then
         self._tablesScroll:ClearAllChildren()
         
@@ -862,7 +852,7 @@ function ExecutorGUI:RefreshTablesView()
     end
 end
 
-function ExecutorGUI:RefreshEventsView()
+function FixedGUI:RefreshEventsView()
     if self._eventsScroll then
         self._eventsScroll:ClearAllChildren()
         
@@ -894,7 +884,7 @@ function ExecutorGUI:RefreshEventsView()
     end
 end
 
-function ExecutorGUI:RefreshRequireView()
+function FixedGUI:RefreshRequireView()
     if self._requireScroll then
         self._requireScroll:ClearAllChildren()
         
@@ -926,49 +916,66 @@ function ExecutorGUI:RefreshRequireView()
     end
 end
 
-function ExecutorGUI:ToggleVisibility()
+function FixedGUI:ToggleVisibility()
     if self._gui then
         self._gui.Enabled = not self._gui.Enabled
     end
 end
 
-function ExecutorGUI:Show()
+function FixedGUI:Show()
     if self._gui then
         self._gui.Enabled = true
     end
 end
 
-function ExecutorGUI:Hide()
+function FixedGUI:Hide()
     if self._gui then
         self._gui.Enabled = false
     end
 end
 
--- AUTO-START FOR CLIENT EXECUTOR
-function ExecutorGUI:AutoStart()
-    -- Create GUI
-    self:Create()
+-- FIXED AutoStart with proper initialization
+function FixedGUI:AutoStart()
+    -- Create GUI first
+    local success = pcall(function()
+        self:Create()
+    end)
+    
+    if not success then
+        warn("Failed to create GUI")
+        return
+    end
     
     -- Start monitoring
     self._viewer.monitorRequire()
     
+    -- Wait a moment for GUI to fully initialize
+    task.spawn(function()
+        wait(0.5)
+        if self._statusLabel then
+            self:UpdateStatus("Executor Viewer Ready", self.Colors.Success)
+        end
+    end)
+    
     -- Auto-refresh
-    spawn(function()
+    task.spawn(function()
         while wait(1) do
-            if self._gui and self._gui.Enabled then
+            if self._gui and self._gui.Enabled and self._initialized then
                 self:RefreshCurrentView()
             end
         end
     end)
     
-    self:UpdateStatus("Executor Viewer Ready", self.Colors.Success)
     print("Lua State Viewer for Executors - Ready!")
 end
 
--- AUTO-START WHEN EXECUTED
-ExecutorGUI:AutoStart()
+-- Safe auto-start
+task.spawn(function()
+    wait(1) -- Give executor time to initialize
+    FixedGUI:AutoStart()
+end)
 
 return {
-    Viewer = ExecutorViewer,
-    GUI = ExecutorGUI
+    Viewer = FixedViewer,
+    GUI = FixedGUI
 }
