@@ -1,5 +1,5 @@
--- Universal Lua State Viewer for Roblox - Enhanced Professional Edition
--- Fixed circular references, complete GUI tabs, deep copy, and performance optimizations
+-- Universal Lua State Viewer for Roblox - Executor Edition
+-- Enhanced with all fixes and optimized for exploit environment
 
 local UniversalLuaStateViewer = {}
 UniversalLuaStateViewer.__index = UniversalLuaStateViewer
@@ -153,10 +153,6 @@ function UniversalLuaStateViewer:createUpvalueView(parent)
         upvalueSetFrame.BorderSizePixel = 0
         upvalueSetFrame.Parent = scroll
         
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 4)
-        corner.Parent = upvalueSetFrame
-        
         local closureLabel = Instance.new("TextLabel")
         closureLabel.Size = UDim2.new(1, -20, 0.4, 0)
         closureLabel.Position = UDim2.new(0, 10, 0, 5)
@@ -205,26 +201,13 @@ function UniversalLuaStateViewer:createUpvalueView(parent)
 end
 
 function UniversalLuaStateViewer:showUpvalueDetails(closureId, upvalues)
-    -- Create a popup or detailed view for upvalues
     local popup = Instance.new("Frame")
     popup.Size = UDim2.new(0.6, 0, 0.7, 0)
     popup.Position = UDim2.new(0.2, 0, 0.15, 0)
     popup.BackgroundColor3 = colors.background
     popup.BorderSizePixel = 0
     popup.ZIndex = 10
-    popup.Parent = self.gui
-    
-    local shadow = Instance.new("ImageLabel")
-    shadow.Size = UDim2.new(1, 10, 1, 10)
-    shadow.Position = UDim2.new(0, -5, 0, -5)
-    shadow.BackgroundTransparency = 1
-    shadow.Image = "rbxassetid://1316045217"
-    shadow.ImageColor3 = Color3.new(0, 0, 0)
-    shadow.ImageTransparency = 0.8
-    shadow.ScaleType = Enum.ScaleType.Slice
-    shadow.SliceCenter = Rect.new(10, 10, 118, 118)
-    shadow.ZIndex = 9
-    shadow.Parent = popup
+    popup.Parent = self.mainContainer
     
     local header = Instance.new("Frame")
     header.Size = UDim2.new(1, 0, 0, 40)
@@ -243,10 +226,6 @@ function UniversalLuaStateViewer:showUpvalueDetails(closureId, upvalues)
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.ZIndex = 12
     title.Parent = header
-    
-    local padding = Instance.new("UIPadding")
-    padding.PaddingLeft = UDim.new(0, 15)
-    padding.Parent = title
     
     local closeButton = Instance.new("TextButton")
     closeButton.Size = UDim2.new(0, 30, 0.7, 0)
@@ -359,10 +338,6 @@ function UniversalLuaStateViewer:createModuleView(parent)
         moduleFrame.BorderSizePixel = 0
         moduleFrame.Parent = scroll
         
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 4)
-        corner.Parent = moduleFrame
-        
         local nameLabel = Instance.new("TextLabel")
         nameLabel.Size = UDim2.new(1, -20, 0.3, 0)
         nameLabel.Position = UDim2.new(0, 10, 0, 5)
@@ -446,10 +421,6 @@ function UniversalLuaStateViewer:createMetatableView(parent)
         metaFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
         metaFrame.BorderSizePixel = 0
         metaFrame.Parent = scroll
-        
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 4)
-        corner.Parent = metaFrame
         
         local idLabel = Instance.new("TextLabel")
         idLabel.Size = UDim2.new(1, -20, 0.3, 0)
@@ -539,10 +510,6 @@ function UniversalLuaStateViewer:createGlobalsView(parent)
             globalFrame.BorderSizePixel = 0
             globalFrame.Parent = scroll
             
-            local corner = Instance.new("UICorner")
-            corner.CornerRadius = UDim.new(0, 4)
-            corner.Parent = globalFrame
-            
             local keyLabel = Instance.new("TextLabel")
             keyLabel.Size = UDim2.new(0.4, -10, 1, 0)
             keyLabel.Position = UDim2.new(0, 10, 0, 0)
@@ -614,10 +581,6 @@ function UniversalLuaStateViewer:createConstantsView(parent)
             constantSetFrame.BorderSizePixel = 0
             constantSetFrame.Parent = scroll
             
-            local corner = Instance.new("UICorner")
-            corner.CornerRadius = UDim.new(0, 4)
-            corner.Parent = constantSetFrame
-            
             local closureLabel = Instance.new("TextLabel")
             closureLabel.Size = UDim2.new(1, -20, 0.5, 0)
             closureLabel.Position = UDim2.new(0, 10, 0, 5)
@@ -657,19 +620,7 @@ function UniversalLuaStateViewer:showConstantDetails(closureId, constants)
     popup.BackgroundColor3 = colors.background
     popup.BorderSizePixel = 0
     popup.ZIndex = 10
-    popup.Parent = self.gui
-    
-    local shadow = Instance.new("ImageLabel")
-    shadow.Size = UDim2.new(1, 10, 1, 10)
-    shadow.Position = UDim2.new(0, -5, 0, -5)
-    shadow.BackgroundTransparency = 1
-    shadow.Image = "rbxassetid://1316045217"
-    shadow.ImageColor3 = Color3.new(0, 0, 0)
-    shadow.ImageTransparency = 0.8
-    shadow.ScaleType = Enum.ScaleType.Slice
-    shadow.SliceCenter = Rect.new(10, 10, 118, 118)
-    shadow.ZIndex = 9
-    shadow.Parent = popup
+    popup.Parent = self.mainContainer
     
     local header = Instance.new("Frame")
     header.Size = UDim2.new(1, 0, 0, 40)
@@ -688,10 +639,6 @@ function UniversalLuaStateViewer:showConstantDetails(closureId, constants)
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.ZIndex = 12
     title.Parent = header
-    
-    local padding = Instance.new("UIPadding")
-    padding.PaddingLeft = UDim.new(0, 15)
-    padding.Parent = title
     
     local closeButton = Instance.new("TextButton")
     closeButton.Size = UDim2.new(0, 30, 0.7, 0)
@@ -1114,8 +1061,7 @@ function UniversalLuaStateViewer:performSearch(query, resultsFrame)
         {name = "Tables", data = state.tables, getDisplayName = function(item) return item.name end},
         {name = "Modules", data = state.modules, getDisplayName = function(item) return item.name end},
         {name = "Metatables", data = state.metatables, getDisplayName = function(item) return "Metatable for " .. (item.attachedTo or "unknown") end},
-        {name = "Upvalues", data = state.upvalues, getDisplayName = function(item) return "Upvalue set" end},
-        {name = "Constants", data = state.constants, getDisplayName = function(item) return "Constants" end}
+        {name = "Upvalues", data = state.upvalues, getDisplayName = function(item) return "Upvalue set" end}
     }
     
     local results = {}
@@ -1151,10 +1097,6 @@ function UniversalLuaStateViewer:performSearch(query, resultsFrame)
         resultFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
         resultFrame.BorderSizePixel = 0
         resultFrame.Parent = resultsFrame
-        
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 4)
-        corner.Parent = resultFrame
         
         local typeLabel = Instance.new("TextLabel")
         typeLabel.Size = UDim2.new(0.2, 0, 0.5, 0)
@@ -1227,91 +1169,7 @@ function UniversalLuaStateViewer:restoreHooks()
 end
 
 -- =========================================
--- 10. GUI USABILITY IMPROVEMENTS
--- =========================================
-
-function UniversalLuaStateViewer:createEnhancedClosureView(parent)
-    self:createPaginatedView(parent, state.closures, function(scroll, id, closure, index)
-        local closureFrame = Instance.new("Frame")
-        closureFrame.Size = UDim2.new(1, -20, 0, 80)
-        closureFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
-        closureFrame.BorderSizePixel = 0
-        closureFrame.Parent = scroll
-        
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 4)
-        corner.Parent = closureFrame
-        
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(1, -20, 0.4, 0)
-        nameLabel.Position = UDim2.new(0, 10, 0, 5)
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.TextColor3 = colors.accent
-        nameLabel.Text = closure.name .. "  •  " .. id:sub(1, 8) .. "..."
-        nameLabel.Font = Enum.Font.GothamBold
-        nameLabel.TextSize = 14
-        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-        nameLabel.Parent = closureFrame
-        
-        local copyButton = Instance.new("TextButton")
-        copyButton.Size = UDim2.new(0, 80, 0, 20)
-        copyButton.Position = UDim2.new(1, -90, 0, 5)
-        copyButton.BackgroundColor3 = colors.success
-        copyButton.TextColor3 = colors.text
-        copyButton.Text = "Copy ID"
-        copyButton.Font = Enum.Font.Gotham
-        copyButton.TextSize = 10
-        copyButton.Parent = closureFrame
-        
-        copyButton.MouseButton1Click:Connect(function()
-            self:copyToClipboard(id)
-        end)
-        
-        local sourceLabel = Instance.new("TextLabel")
-        sourceLabel.Size = UDim2.new(1, -20, 0.3, 0)
-        sourceLabel.Position = UDim2.new(0, 10, 0.4, 0)
-        sourceLabel.BackgroundTransparency = 1
-        sourceLabel.TextColor3 = colors.textSecondary
-        sourceLabel.Text = "Source: " .. (closure.source:sub(1, 50) .. (closure.source:len() > 50 and "..." or ""))
-        sourceLabel.Font = Enum.Font.Gotham
-        sourceLabel.TextSize = 11
-        sourceLabel.TextXAlignment = Enum.TextXAlignment.Left
-        sourceLabel.Parent = closureFrame
-        
-        local upvalueLabel = Instance.new("TextLabel")
-        upvalueLabel.Size = UDim2.new(0.5, -10, 0.3, 0)
-        upvalueLabel.Position = UDim2.new(0, 10, 0.7, 0)
-        upvalueLabel.BackgroundTransparency = 1
-        upvalueLabel.TextColor3 = colors.textSecondary
-        upvalueLabel.Text = "Upvalues: " .. self:countTable(closure.upvalues)
-        upvalueLabel.Font = Enum.Font.Gotham
-        upvalueLabel.TextSize = 11
-        upvalueLabel.TextXAlignment = Enum.TextXAlignment.Left
-        upvalueLabel.Parent = closureFrame
-        
-        local timeLabel = Instance.new("TextLabel")
-        timeLabel.Size = UDim2.new(0.5, -10, 0.3, 0)
-        timeLabel.Position = UDim2.new(0.5, 0, 0.7, 0)
-        timeLabel.BackgroundTransparency = 1
-        timeLabel.TextColor3 = colors.textSecondary
-        timeLabel.Text = "Captured: " .. os.date("%H:%M:%S", closure.timestamp)
-        timeLabel.Font = Enum.Font.Gotham
-        timeLabel.TextSize = 11
-        timeLabel.TextXAlignment = Enum.TextXAlignment.Right
-        timeLabel.Parent = closureFrame
-    end, 25) -- 25 items per page for better performance
-end
-
-function UniversalLuaStateViewer:copyToClipboard(text)
-    -- Simple clipboard simulation
-    print("[COPY] " .. text)
-    if self.statusText then
-        self.statusText.Text = "Copied to clipboard: " .. text:sub(1, 20) .. "..."
-    end
-end
-
--- =========================================
--- 11. SECURITY & ERROR HANDLING
+-- CORE HOOKING SYSTEM (Safe for Executor)
 -- =========================================
 
 function UniversalLuaStateViewer:installClosureHook()
@@ -1335,6 +1193,67 @@ function UniversalLuaStateViewer:installClosureHook()
     end
 end
 
+function UniversalLuaStateViewer:hookFunctionDefinitions()
+    local originalG = getfenv and getfenv(2) or _G
+    local meta = getmetatable(originalG) or {}
+    local originalIndex = meta.__index or function(t, k) return rawget(t, k) end
+    
+    meta.__index = function(t, k)
+        local value = originalIndex(t, k)
+        if type(value) == "function" then
+            pcall(function() self:captureClosure(value, k, "global_function") end)
+        end
+        return value
+    end
+    
+    setmetatable(originalG, meta)
+end
+
+function UniversalLuaStateViewer:captureClosure(func, name, source)
+    local closureId = tostring(func):gsub("function: ", "")
+    
+    if not state.closures[closureId] then
+        state.closures[closureId] = {
+            id = closureId,
+            name = name or "anonymous",
+            source = source or "unknown",
+            upvalues = {},
+            environment = {},
+            proto = self:getPrototypeInfo(func),
+            constants = self:getConstants(func),
+            timestamp = tick()
+        }
+        
+        self:captureUpvalues(func, closureId)
+    end
+    
+    return closureId
+end
+
+function UniversalLuaStateViewer:captureUpvalues(func, closureId)
+    local upvalueInfo = {}
+    
+    for i = 1, math.huge do
+        local success, name, value = pcall(debug.getupvalue, func, i)
+        if not success or not name then break end
+        
+        upvalueInfo[name] = {
+            name = name,
+            value = value,
+            type = type(value),
+            closureId = closureId,
+            index = i
+        }
+        
+        if type(value) == "table" then
+            self:captureTable(value, name .. "_upvalue")
+        end
+    end
+    
+    state.closures[closureId].upvalues = upvalueInfo
+    state.upvalues[closureId] = upvalueInfo
+end
+
 function UniversalLuaStateViewer:installTableHook()
     local success, err = pcall(function()
         local originalSetMetatable = originalFunctions.setmetatable
@@ -1352,6 +1271,36 @@ function UniversalLuaStateViewer:installTableHook()
     if not success then
         warn("Table hook installation failed: " .. tostring(err))
     end
+end
+
+function UniversalLuaStateViewer:monitorTableChanges(tbl, tableId)
+    local originalMeta = getmetatable(tbl) or {}
+    local newMeta = {
+        __newindex = function(t, key, value)
+            self:recordTableChange(tableId, key, value, "set")
+            rawset(t, key, value)
+        end,
+        __index = originalMeta.__index,
+        __call = originalMeta.__call,
+        __metatable = originalMeta.__metatable
+    }
+    
+    setmetatable(tbl, newMeta)
+end
+
+function UniversalLuaStateViewer:recordTableChange(tableId, key, value, operation)
+    if not state.tables[tableId] then return end
+    
+    local change = {
+        tableId = tableId,
+        key = key,
+        value = value,
+        operation = operation,
+        timestamp = tick(),
+        stack = self:getStackTrace()
+    }
+    
+    table.insert(state.execution, change)
 end
 
 function UniversalLuaStateViewer:installRequireHook()
@@ -1383,7 +1332,306 @@ function UniversalLuaStateViewer:installRequireHook()
     end
 end
 
--- Update the showTabContent function to use enhanced views
+function UniversalLuaStateViewer:installExecutionHook()
+    pcall(function()
+        debug.sethook(function(event, line)
+            if event == "call" then
+                self:recordFunctionCall(2)
+            elseif event == "return" then
+                self:recordFunctionReturn(2)
+            end
+        end, "cr", 0)
+    end)
+end
+
+function UniversalLuaStateViewer:installGlobalHook()
+    self:monitorGlobalEnvironment()
+end
+
+function UniversalLuaStateViewer:monitorGlobalEnvironment()
+    local env = getfenv and getfenv(2) or _G
+    self:captureTable(env, "_G")
+end
+
+function UniversalLuaStateViewer:captureMetatable(mt, originalTable)
+    local mtId = tostring(mt)
+    
+    state.metatables[mtId] = {
+        id = mtId,
+        attachedTo = tostring(originalTable),
+        methods = {},
+        timestamp = tick()
+    }
+    
+    for method, func in pairs(mt) do
+        if type(func) == "function" then
+            state.metatables[mtId].methods[method] = {
+                name = method,
+                closureId = self:captureClosure(func, method .. "_metamethod")
+            }
+        end
+    end
+end
+
+-- =========================================
+-- UTILITY FUNCTIONS
+-- =========================================
+
+function UniversalLuaStateViewer:getPrototypeInfo(func)
+    local info = debug.getinfo(func, "S")
+    return {
+        source = info.source,
+        linedefined = info.linedefined,
+        lastlinedefined = info.lastdefined,
+        what = info.what,
+        nups = info.nups
+    }
+end
+
+function UniversalLuaStateViewer:getConstants(func)
+    local constants = {}
+    local i = 1
+    while true do
+        local success, k, v = pcall(debug.getconstant, func, i)
+        if not success then break end
+        if k == nil then break end
+        constants[i] = {index = i, value = v, type = type(v)}
+        i = i + 1
+    end
+    return constants
+end
+
+function UniversalLuaStateViewer:getStackTrace()
+    local stack = {}
+    for i = 3, 10 do
+        local info = debug.getinfo(i, "nSl")
+        if not info then break end
+        table.insert(stack, {
+            name = info.name or "?",
+            source = info.source,
+            currentline = info.currentline
+        })
+    end
+    return stack
+end
+
+function UniversalLuaStateViewer:countTable(tbl)
+    local count = 0
+    for _ in pairs(tbl) do count = count + 1 end
+    return count
+end
+
+-- =========================================
+-- PROFESSIONAL GUI CREATION (Executor Safe)
+-- =========================================
+
+function UniversalLuaStateViewer:createGUI()
+    if self.gui then self.gui:Destroy() end
+    
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "UniversalLuaStateViewer"
+    screenGui.Parent = game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+    
+    -- Main Container
+    local mainContainer = Instance.new("Frame")
+    mainContainer.Size = UDim2.new(0.85, 0, 0.8, 0)
+    mainContainer.Position = UDim2.new(0.075, 0, 0.1, 0)
+    mainContainer.BackgroundColor3 = colors.background
+    mainContainer.BorderSizePixel = 0
+    mainContainer.ClipsDescendants = true
+    mainContainer.Parent = screenGui
+    
+    -- Header
+    local header = Instance.new("Frame")
+    header.Size = UDim2.new(1, 0, 0, 40)
+    header.BackgroundColor3 = colors.header
+    header.BorderSizePixel = 0
+    header.Parent = mainContainer
+    
+    -- Title
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(0.6, 0, 1, 0)
+    title.BackgroundTransparency = 1
+    title.TextColor3 = colors.text
+    title.Text = "Universal Lua State Viewer"
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 16
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = header
+    
+    local padding = Instance.new("UIPadding")
+    padding.PaddingLeft = UDim.new(0, 15)
+    padding.Parent = title
+    
+    -- Control Buttons
+    local controlFrame = Instance.new("Frame")
+    controlFrame.Size = UDim2.new(0.4, 0, 1, 0)
+    controlFrame.Position = UDim2.new(0.6, 0, 0, 0)
+    controlFrame.BackgroundTransparency = 1
+    controlFrame.Parent = header
+    
+    local minimizeBtn = self:createControlButton("−", controlFrame, 0, function()
+        self:toggleMinimize()
+    end)
+    
+    local closeBtn = self:createControlButton("×", controlFrame, 1, function()
+        self:stop()
+    end)
+    
+    -- Status Bar
+    local statusBar = Instance.new("Frame")
+    statusBar.Size = UDim2.new(1, 0, 0, 25)
+    statusBar.Position = UDim2.new(0, 0, 0, 40)
+    statusBar.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    statusBar.BorderSizePixel = 0
+    statusBar.Parent = mainContainer
+    
+    local statusText = Instance.new("TextLabel")
+    statusText.Size = UDim2.new(1, -20, 1, 0)
+    statusText.Position = UDim2.new(0, 10, 0, 0)
+    statusText.BackgroundTransparency = 1
+    statusText.TextColor3 = colors.textSecondary
+    statusText.Text = "Ready - Monitoring VM State"
+    statusText.Font = Enum.Font.Gotham
+    statusText.TextSize = 12
+    statusText.TextXAlignment = Enum.TextXAlignment.Left
+    statusText.Parent = statusBar
+    
+    -- Main Content Area
+    local contentArea = Instance.new("Frame")
+    contentArea.Size = UDim2.new(1, 0, 1, -65)
+    contentArea.Position = UDim2.new(0, 0, 0, 65)
+    contentArea.BackgroundTransparency = 1
+    contentArea.Parent = mainContainer
+    
+    -- Sidebar
+    local sidebar = Instance.new("Frame")
+    sidebar.Size = UDim2.new(0.2, 0, 1, 0)
+    sidebar.BackgroundColor3 = colors.sidebar
+    sidebar.BorderSizePixel = 0
+    sidebar.Parent = contentArea
+    
+    -- Content Frame
+    local contentFrame = Instance.new("Frame")
+    contentFrame.Size = UDim2.new(0.8, 0, 1, 0)
+    contentFrame.Position = UDim2.new(0.2, 0, 0, 0)
+    contentFrame.BackgroundColor3 = colors.background
+    contentFrame.BorderSizePixel = 0
+    contentFrame.Parent = contentArea
+    
+    -- Create Tabs
+    self:createSidebarTabs(sidebar, contentFrame)
+    
+    -- Make window draggable
+    self:makeDraggable(mainContainer, header)
+    
+    self.gui = screenGui
+    self.mainContainer = mainContainer
+    self.statusText = statusText
+    self.originalSize = mainContainer.Size
+    self.originalPosition = mainContainer.Position
+end
+
+function UniversalLuaStateViewer:createControlButton(symbol, parent, index, callback)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(0, 30, 0.7, 0)
+    button.Position = UDim2.new(1, -(index + 1) * 35, 0.15, 0)
+    button.BackgroundColor3 = colors.accent
+    button.TextColor3 = colors.text
+    button.Text = symbol
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 16
+    button.Parent = parent
+    
+    button.MouseButton1Click:Connect(callback)
+    
+    return button
+end
+
+function UniversalLuaStateViewer:createSidebarTabs(sidebar, contentFrame)
+    local tabs = {
+        {"Closures", "📋", "View all captured functions"},
+        {"Upvalues", "🔗", "Inspect closure upvalues"},
+        {"Tables", "🗂️", "Monitor table mutations"},
+        {"Modules", "📦", "Require calls and results"},
+        {"Metatables", "⚙️", "Metatable configurations"},
+        {"Globals", "🌐", "Global environment changes"},
+        {"Constants", "🔢", "Function constants"},
+        {"Diff", "🔄", "Compare snapshots"},
+        {"Search", "🔍", "Search across all data"}
+    }
+    
+    local tabButtons = Instance.new("ScrollingFrame")
+    tabButtons.Size = UDim2.new(1, 0, 1, 0)
+    tabButtons.BackgroundTransparency = 1
+    tabButtons.ScrollBarThickness = 4
+    tabButtons.Parent = sidebar
+    
+    local layout = Instance.new("UIListLayout")
+    layout.Parent = tabButtons
+    
+    for i, tabData in ipairs(tabs) do
+        local tabName, icon, description = tabData[1], tabData[2], tabData[3]
+        
+        local tabButton = Instance.new("TextButton")
+        tabButton.Size = UDim2.new(1, -20, 0, 50)
+        tabButton.Position = UDim2.new(0, 10, 0, (i-1) * 55)
+        tabButton.BackgroundColor3 = colors.sidebar
+        tabButton.BorderSizePixel = 0
+        tabButton.Text = ""
+        tabButton.Parent = tabButtons
+        
+        local iconLabel = Instance.new("TextLabel")
+        iconLabel.Size = UDim2.new(0, 30, 1, 0)
+        iconLabel.BackgroundTransparency = 1
+        iconLabel.TextColor3 = colors.textSecondary
+        iconLabel.Text = icon
+        iconLabel.Font = Enum.Font.Gotham
+        iconLabel.TextSize = 16
+        iconLabel.Parent = tabButton
+        
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, -40, 0.6, 0)
+        nameLabel.Position = UDim2.new(0, 30, 0, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.TextColor3 = colors.text
+        nameLabel.Text = tabName
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 14
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.Parent = tabButton
+        
+        local descLabel = Instance.new("TextLabel")
+        descLabel.Size = UDim2.new(1, -40, 0.4, 0)
+        descLabel.Position = UDim2.new(0, 30, 0.6, 0)
+        descLabel.BackgroundTransparency = 1
+        descLabel.TextColor3 = colors.textSecondary
+        descLabel.Text = description
+        descLabel.Font = Enum.Font.Gotham
+        descLabel.TextSize = 10
+        descLabel.TextXAlignment = Enum.TextXAlignment.Left
+        descLabel.Parent = tabButton
+        
+        -- Hover effects
+        tabButton.MouseEnter:Connect(function()
+            tabButton.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+        end)
+        
+        tabButton.MouseLeave:Connect(function()
+            tabButton.BackgroundColor3 = colors.sidebar
+        end)
+        
+        tabButton.MouseButton1Click:Connect(function()
+            self:showTabContent(tabName, contentFrame)
+        end)
+    end
+    
+    tabButtons.CanvasSize = UDim2.new(0, 0, 0, #tabs * 55)
+    
+    -- Show first tab by default
+    self:showTabContent("Closures", contentFrame)
+end
+
 function UniversalLuaStateViewer:showTabContent(tabName, contentFrame)
     -- Clear existing content
     for _, child in ipairs(contentFrame:GetChildren()) do
@@ -1415,9 +1663,59 @@ function UniversalLuaStateViewer:showTabContent(tabName, contentFrame)
     content.BackgroundTransparency = 1
     content.Parent = contentFrame
     
-    -- Enhanced tab routing with performance optimizations
+    -- Tab-specific content
     if tabName == "Closures" then
-        self:createEnhancedClosureView(content)
+        self:createPaginatedView(content, state.closures, function(scroll, id, closure, index)
+            local closureFrame = Instance.new("Frame")
+            closureFrame.Size = UDim2.new(1, -20, 0, 80)
+            closureFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
+            closureFrame.BorderSizePixel = 0
+            closureFrame.Parent = scroll
+            
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Size = UDim2.new(1, -20, 0.4, 0)
+            nameLabel.Position = UDim2.new(0, 10, 0, 5)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.TextColor3 = colors.accent
+            nameLabel.Text = closure.name .. "  •  " .. id:sub(1, 8) .. "..."
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.TextSize = 14
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            nameLabel.Parent = closureFrame
+            
+            local sourceLabel = Instance.new("TextLabel")
+            sourceLabel.Size = UDim2.new(1, -20, 0.3, 0)
+            sourceLabel.Position = UDim2.new(0, 10, 0.4, 0)
+            sourceLabel.BackgroundTransparency = 1
+            sourceLabel.TextColor3 = colors.textSecondary
+            sourceLabel.Text = "Source: " .. (closure.source:sub(1, 50) .. (closure.source:len() > 50 and "..." or ""))
+            sourceLabel.Font = Enum.Font.Gotham
+            sourceLabel.TextSize = 11
+            sourceLabel.TextXAlignment = Enum.TextXAlignment.Left
+            sourceLabel.Parent = closureFrame
+            
+            local upvalueLabel = Instance.new("TextLabel")
+            upvalueLabel.Size = UDim2.new(0.5, -10, 0.3, 0)
+            upvalueLabel.Position = UDim2.new(0, 10, 0.7, 0)
+            upvalueLabel.BackgroundTransparency = 1
+            upvalueLabel.TextColor3 = colors.textSecondary
+            upvalueLabel.Text = "Upvalues: " .. self:countTable(closure.upvalues)
+            upvalueLabel.Font = Enum.Font.Gotham
+            upvalueLabel.TextSize = 11
+            upvalueLabel.TextXAlignment = Enum.TextXAlignment.Left
+            upvalueLabel.Parent = closureFrame
+            
+            local timeLabel = Instance.new("TextLabel")
+            timeLabel.Size = UDim2.new(0.5, -10, 0.3, 0)
+            timeLabel.Position = UDim2.new(0.5, 0, 0.7, 0)
+            timeLabel.BackgroundTransparency = 1
+            timeLabel.TextColor3 = colors.textSecondary
+            timeLabel.Text = "Captured: " .. os.date("%H:%M:%S", closure.timestamp)
+            timeLabel.Font = Enum.Font.Gotham
+            timeLabel.TextSize = 11
+            timeLabel.TextXAlignment = Enum.TextXAlignment.Right
+            timeLabel.Parent = closureFrame
+        end, 25)
     elseif tabName == "Upvalues" then
         self:createUpvalueView(content)
     elseif tabName == "Tables" then
@@ -1427,10 +1725,6 @@ function UniversalLuaStateViewer:showTabContent(tabName, contentFrame)
             tableFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
             tableFrame.BorderSizePixel = 0
             tableFrame.Parent = scroll
-            
-            local corner = Instance.new("UICorner")
-            corner.CornerRadius = UDim.new(0, 4)
-            corner.Parent = tableFrame
             
             local nameLabel = Instance.new("TextLabel")
             nameLabel.Size = UDim2.new(1, -20, 0.5, 0)
@@ -1480,7 +1774,48 @@ function UniversalLuaStateViewer:showTabContent(tabName, contentFrame)
     end
 end
 
--- Update the diff system to include all categories
+function UniversalLuaStateViewer:createDiffView(parent)
+    local controlBar = Instance.new("Frame")
+    controlBar.Size = UDim2.new(1, 0, 0, 50)
+    controlBar.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    controlBar.BorderSizePixel = 0
+    controlBar.Parent = parent
+    
+    local snapshotButton = Instance.new("TextButton")
+    snapshotButton.Size = UDim2.new(0.2, 0, 0.6, 0)
+    snapshotButton.Position = UDim2.new(0.05, 0, 0.2, 0)
+    snapshotButton.BackgroundColor3 = colors.accent
+    snapshotButton.TextColor3 = colors.text
+    snapshotButton.Text = "Take Snapshot"
+    snapshotButton.Font = Enum.Font.GothamBold
+    snapshotButton.TextSize = 12
+    snapshotButton.Parent = controlBar
+    
+    local snapshotCount = Instance.new("TextLabel")
+    snapshotCount.Size = UDim2.new(0.2, 0, 1, 0)
+    snapshotCount.Position = UDim2.new(0.3, 0, 0, 0)
+    snapshotCount.BackgroundTransparency = 1
+    snapshotCount.TextColor3 = colors.text
+    snapshotCount.Text = "Snapshots: " .. #state.snapshots
+    snapshotCount.Font = Enum.Font.Gotham
+    snapshotCount.TextSize = 12
+    snapshotCount.Parent = controlBar
+    
+    local diffDisplay = Instance.new("ScrollingFrame")
+    diffDisplay.Size = UDim2.new(1, -20, 1, -60)
+    diffDisplay.Position = UDim2.new(0, 10, 0, 50)
+    diffDisplay.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    diffDisplay.Parent = parent
+    
+    snapshotButton.MouseButton1Click:Connect(function()
+        self:takeSnapshot("Manual_" .. os.time())
+        snapshotCount.Text = "Snapshots: " .. #state.snapshots
+        self:updateDiffDisplay(diffDisplay)
+    end)
+    
+    self:updateDiffDisplay(diffDisplay)
+end
+
 function UniversalLuaStateViewer:updateDiffDisplay(display)
     for _, child in ipairs(display:GetChildren()) do
         child:Destroy()
@@ -1505,54 +1840,208 @@ function UniversalLuaStateViewer:updateDiffDisplay(display)
     local layout = Instance.new("UIListLayout")
     layout.Parent = display
     
-    -- Display all diff categories
     self:addDiffSection(display, "🆕 New Closures", diff.closures.added, colors.success)
     self:addDiffSection(display, "🗑️ Removed Closures", diff.closures.removed, colors.error)
-    self:addDiffSection(display, "🆕 New Upvalues", diff.upvalues.added, colors.success)
-    self:addDiffSection(display, "🗑️ Removed Upvalues", diff.upvalues.removed, colors.error)
     self:addDiffSection(display, "🆕 New Tables", diff.tables.added, colors.success)
     self:addDiffSection(display, "🗑️ Removed Tables", diff.tables.removed, colors.error)
     self:addDiffSection(display, "📦 New Modules", diff.modules.added, colors.success)
     self:addDiffSection(display, "📦 Removed Modules", diff.modules.removed, colors.error)
-    self:addDiffSection(display, "⚙️ New Metatables", diff.metatables.added, colors.success)
-    self:addDiffSection(display, "⚙️ Removed Metatables", diff.metatables.removed, colors.error)
-    self:addDiffSection(display, "🌐 Global Changes", diff.globals.modified, colors.warning)
-    self:addDiffSection(display, "🔢 Constant Changes", diff.constants.modified, colors.warning)
     
     display.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y)
 end
 
--- Update stop function to restore hooks
-function UniversalLuaStateViewer:stop()
-    self.enabled = false
-    self:restoreHooks()
+function UniversalLuaStateViewer:addDiffSection(parent, title, data, color)
+    if not next(data) then return end
     
-    if self.gui then
-        self.gui:Destroy()
-        self.gui = nil
+    local section = Instance.new("Frame")
+    section.Size = UDim2.new(1, 0, 0, 40)
+    section.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+    section.BorderSizePixel = 0
+    section.Parent = parent
+    
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -20, 0.5, 0)
+    titleLabel.Position = UDim2.new(0, 10, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.TextColor3 = color
+    titleLabel.Text = title .. " (" .. self:countTable(data) .. ")"
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 14
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = section
+    
+    local count = 0
+    for id, item in pairs(data) do
+        count = count + 1
+        if count > 10 then break end
+        
+        local itemLabel = Instance.new("TextLabel")
+        itemLabel.Size = UDim2.new(1, -20, 0, 20)
+        itemLabel.Position = UDim2.new(0, 10, 0, 20 + (count * 20))
+        itemLabel.BackgroundTransparency = 1
+        itemLabel.TextColor3 = colors.text
+        itemLabel.Text = "• " .. tostring(item.name or id)
+        itemLabel.Font = Enum.Font.Gotham
+        itemLabel.TextSize = 12
+        itemLabel.TextXAlignment = Enum.TextXAlignment.Left
+        itemLabel.Parent = section
+        
+        section.Size = UDim2.new(1, 0, 0, 40 + (count * 20))
     end
 end
 
--- Keep all existing utility functions from previous implementation
-function UniversalLuaStateViewer:countTable(tbl)
-    local count = 0
-    for _ in pairs(tbl) do count = count + 1 end
-    return count
+function UniversalLuaStateViewer:createSearchView(parent)
+    local searchContainer = Instance.new("Frame")
+    searchContainer.Size = UDim2.new(1, 0, 0, 60)
+    searchContainer.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    searchContainer.BorderSizePixel = 0
+    searchContainer.Parent = parent
+    
+    local searchBox = Instance.new("TextBox")
+    searchBox.Size = UDim2.new(0.8, 0, 0.5, 0)
+    searchBox.Position = UDim2.new(0.1, 0, 0.25, 0)
+    searchBox.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+    searchBox.TextColor3 = colors.text
+    searchBox.PlaceholderText = "🔍 Search across all VM state..."
+    searchBox.PlaceholderColor3 = colors.textSecondary
+    searchBox.Font = Enum.Font.Gotham
+    searchBox.TextSize = 14
+    searchBox.Parent = searchContainer
+    
+    local resultsFrame = Instance.new("ScrollingFrame")
+    resultsFrame.Size = UDim2.new(1, -20, 1, -70)
+    resultsFrame.Position = UDim2.new(0, 10, 0, 60)
+    resultsFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    resultsFrame.Parent = parent
+    
+    searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        self:performSearch(searchBox.Text, resultsFrame)
+    end)
 end
 
-function UniversalLuaStateViewer:getStateSummary()
-    return {
-        closures = self:countTable(state.closures),
-        upvalues = self:countTable(state.upvalues),
-        tables = self:countTable(state.tables),
-        modules = self:countTable(state.modules),
-        metatables = self:countTable(state.metatables),
-        snapshots = #state.snapshots,
-        executionEvents = #state.execution
-    }
+-- =========================================
+-- UTILITY FUNCTIONS
+-- =========================================
+
+function UniversalLuaStateViewer:makeDraggable(frame, handle)
+    local dragging = false
+    local dragInput, dragStart, startPos
+    
+    handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    handle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+    
+    game:GetService("UserInputService").InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
 end
 
--- Update the start function
+function UniversalLuaStateViewer:toggleMinimize()
+    if self.isMinimized then
+        -- Restore
+        self.mainContainer.Size = self.originalSize
+        self.isMinimized = false
+    else
+        -- Minimize
+        self.originalSize = self.mainContainer.Size
+        self.mainContainer.Size = UDim2.new(0.3, 0, 0, 65)
+        self.isMinimized = true
+    end
+end
+
+function UniversalLuaStateViewer:diffSnapshots(snap1, snap2)
+    local differences = {}
+    
+    differences.closures = self:compareClosures(snap1.closures, snap2.closures)
+    differences.tables = self:compareTables(snap1.tables, snap2.tables)
+    differences.modules = self:compareModules(snap1.modules, snap2.modules)
+    differences.upvalues = self:compareUpvalues(snap1.upvalues, snap2.upvalues)
+    differences.metatables = self:compareMetatables(snap1.metatables, snap2.metatables)
+    differences.globals = self:compareGlobals(snap1.globals, snap2.globals)
+    differences.constants = self:compareConstants(snap1.constants, snap2.constants)
+    
+    return differences
+end
+
+function UniversalLuaStateViewer:compareClosures(old, new)
+    local diff = {added = {}, removed = {}, modified = {}}
+    
+    for id, closure in pairs(new) do
+        if not old[id] then
+            diff.added[id] = closure
+        end
+    end
+    
+    for id, closure in pairs(old) do
+        if not new[id] then
+            diff.removed[id] = closure
+        end
+    end
+    
+    return diff
+end
+
+function UniversalLuaStateViewer:compareTables(old, new)
+    local diff = {added = {}, removed = {}, modified = {}}
+    
+    for id, tbl in pairs(new) do
+        if not old[id] then
+            diff.added[id] = tbl
+        elseif tbl.size ~= old[id].size then
+            diff.modified[id] = {old = old[id], new = tbl}
+        end
+    end
+    
+    for id, tbl in pairs(old) do
+        if not new[id] then
+            diff.removed[id] = tbl
+        end
+    end
+    
+    return diff
+end
+
+function UniversalLuaStateViewer:compareModules(old, new)
+    local diff = {added = {}, removed = {}, modified = {}}
+    
+    for name, module in pairs(new) do
+        if not old[name] then
+            diff.added[name] = module
+        end
+    end
+    
+    for name, module in pairs(old) do
+        if not new[name] then
+            diff.removed[name] = module
+        end
+    end
+    
+    return diff
+end
+
+-- =========================================
+-- PUBLIC API
+-- =========================================
+
 function UniversalLuaStateViewer:start()
     local success, err = pcall(function()
         self:installHooks()
@@ -1570,6 +2059,42 @@ function UniversalLuaStateViewer:start()
     if not success then
         warn("Failed to start Universal Lua State Viewer: " .. tostring(err))
     end
+end
+
+function UniversalLuaStateViewer:stop()
+    self.enabled = false
+    self:restoreHooks()
+    
+    if self.gui then
+        self.gui:Destroy()
+        self.gui = nil
+    end
+end
+
+function UniversalLuaStateViewer:getData()
+    return state
+end
+
+function UniversalLuaStateViewer:clearData()
+    table.clear(state.closures)
+    table.clear(state.upvalues)
+    table.clear(state.tables)
+    table.clear(state.modules)
+    table.clear(state.metatables)
+    table.clear(state.globals)
+    table.clear(state.execution)
+end
+
+function UniversalLuaStateViewer:getStateSummary()
+    return {
+        closures = self:countTable(state.closures),
+        upvalues = self:countTable(state.upvalues),
+        tables = self:countTable(state.tables),
+        modules = self:countTable(state.modules),
+        metatables = self:countTable(state.metatables),
+        snapshots = #state.snapshots,
+        executionEvents = #state.execution
+    }
 end
 
 -- Initialize and return instance
