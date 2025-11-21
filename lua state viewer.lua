@@ -1,5 +1,5 @@
--- Universal Lua State Viewer for Roblox - Safe Metatable Edition
--- Uses safe approaches that don't modify protected metatables
+-- Universal Lua State Viewer for Roblox - Intrusive Edition
+-- Uses metatable bypasses and aggressive hooking to capture everything
 
 local UniversalLuaStateViewer = {}
 UniversalLuaStateViewer.__index = UniversalLuaStateViewer
@@ -32,11 +32,50 @@ local colors = {
     textSecondary = Color3.fromRGB(180, 180, 190)
 }
 
--- Store original functions for safe hooking
+-- Store original functions
 local originalFunctions = {
-    loadstring = nil,
-    require = nil
+    loadstring = loadstring or load,
+    setmetatable = setmetatable,
+    require = require,
+    getmetatable = getmetatable,
+    setreadonly = setreadonly or function() end,
+    isreadonly = isreadonly or function() return false end
 }
+
+-- Bypass protected metatables
+local function bypassProtectedMetatable(tbl)
+    local success, mt = pcall(getmetatable, tbl)
+    if success and mt then
+        -- Try to bypass protection
+        local bypassed = false
+        pcall(function()
+            local raw_mt = debug.getmetatable(tbl)
+            if raw_mt then
+                setmetatable(tbl, nil)
+                setmetatable(tbl, raw_mt)
+                bypassed = true
+            end
+        end)
+        return bypassed
+    end
+    return false
+end
+
+-- Aggressive table monitoring
+local function createAggressiveMetatable(tableId, viewer)
+    return {
+        __newindex = function(t, key, value)
+            viewer:recordTableChange(tableId, key, value, "set")
+            rawset(t, key, value)
+        end,
+        __index = function(t, key)
+            local val = rawget(t, key)
+            viewer:recordTableChange(tableId, key, val, "get")
+            return val
+        end,
+        __metatable = "Protected"
+    }
+end
 
 function UniversalLuaStateViewer.new()
     local self = setmetatable({}, UniversalLuaStateViewer)
@@ -51,106 +90,252 @@ function UniversalLuaStateViewer.new()
 end
 
 -- =========================================
--- SAFE HOOKING SYSTEM (No Protected Metatable Changes)
+-- AGGRESSIVE HOOKING SYSTEM
 -- =========================================
 
 function UniversalLuaStateViewer:installHooks()
     if self.enabled then return end
     
-    -- Store original functions
-    originalFunctions.loadstring = loadstring or load
-    originalFunctions.require = require
+    print("Installing aggressive hooks...")
     
+    -- Hook loadstring/load
     self:installClosureHook()
+    
+    -- Hook setmetatable aggressively
+    self:installTableHook()
+    
+    -- Hook require
     self:installRequireHook()
+    
+    -- Install execution hook
     self:installExecutionHook()
+    
+    -- Install global hook
+    self:installGlobalHook()
+    
+    -- Capture initial state aggressively
     self:captureInitialState()
     
     self.enabled = true
+    print("Aggressive hooks installed successfully!")
 end
 
 function UniversalLuaStateViewer:installClosureHook()
-    local success, err = pcall(function()
-        local originalLoadstring = originalFunctions.loadstring
-        if originalLoadstring then
-            loadstring = function(str, chunkname)
-                local func, loadErr = originalLoadstring(str, chunkname)
-                if func then
-                    pcall(function() self:captureClosure(func, chunkname or "loadstring", str) end)
+    -- Hook loadstring
+    loadstring = function(str, chunkname)
+        local func, err = originalFunctions.loadstring(str, chunkname)
+        if func then
+            self:captureClosure(func, chunkname or "loadstring", str)
+        end
+        return func, err
+    end
+    
+    -- Hook function environment access
+    self:hookFunctionEnvironments()
+end
+
+function UniversalLuaStateViewer:hookFunctionEnvironments()
+    -- Hook debug library to capture function environments
+    local originalDebugGetInfo = debug.getinfo
+    debug.getinfo = function(func, ...)
+        local info = originalDebugGetInfo(func, ...)
+        if info and info.func then
+            self:captureClosure(info.func, info.name or "debug_getinfo", "debug")
+        end
+        return info
+    end
+end
+
+function UniversalLuaStateViewer:installTableHook()
+    -- Aggressive setmetatable hook
+    setmetatable = function(t, mt)
+        if type(t) == "table" then
+            -- Capture table before setting metatable
+            self:captureTable(t, "table_with_metatable")
+            
+            -- Try to bypass protection
+            bypassProtectedMetatable(t)
+            
+            -- Set monitoring metatable
+            local tableId = tostring(t)
+            local success = pcall(function()
+                local monitoringMt = createAggressiveMetatable(tableId, self)
+                if mt then
+                    -- Combine with existing metatable
+                    setmetatable(t, monitoringMt)
+                    self:captureMetatable(mt, t)
+                else
+                    setmetatable(t, monitoringMt)
                 end
-                return func, loadErr
+            end)
+            
+            if not success then
+                -- Fallback: just use original
+                return originalFunctions.setmetatable(t, mt)
             end
         end
-    end)
-    
-    if not success then
-        warn("Closure hook installation failed: " .. tostring(err))
+        return originalFunctions.setmetatable(t, mt)
     end
 end
 
 function UniversalLuaStateViewer:installRequireHook()
-    local success, err = pcall(function()
-        local originalRequire = originalFunctions.require
-        require = function(module)
-            local success, result = pcall(originalRequire, module)
+    require = function(module)
+        local success, result = pcall(originalFunctions.require, module)
+        
+        state.modules[module] = {
+            name = module,
+            result = result,
+            success = success,
+            timestamp = tick(),
+            type = type(result)
+        }
+        
+        if success and type(result) == "table" then
+            self:captureTable(result, "module_" .. module)
             
-            pcall(function()
-                state.modules[module] = {
-                    name = module,
-                    result = result,
-                    success = success,
-                    timestamp = tick(),
-                    type = type(result)
-                }
-                
-                if success and type(result) == "table" then
-                    self:captureTable(result, "module_" .. module)
+            -- Also capture all functions in the module
+            for k, v in pairs(result) do
+                if type(v) == "function" then
+                    self:captureClosure(v, k, "module_function")
+                elseif type(v) == "table" then
+                    self:captureTable(v, "module_subtable_" .. k)
                 end
-            end)
-            
-            return result
+            end
         end
-    end)
-    
-    if not success then
-        warn("Require hook installation failed: " .. tostring(err))
+        
+        return result
     end
 end
 
 function UniversalLuaStateViewer:installExecutionHook()
+    -- Install very aggressive execution hook
+    debug.sethook(function(event, line)
+        if event == "call" then
+            self:recordFunctionCall(2)
+        elseif event == "return" then
+            self:recordFunctionReturn(2)
+        elseif event == "line" then
+            self:recordLineExecution(line)
+        end
+    end, "crl", 0)
+end
+
+function UniversalLuaStateViewer:installGlobalHook()
+    -- Aggressively monitor _G
+    self:monitorGlobalEnvironment()
+    
+    -- Also hook global assignments
+    self:hookGlobalAssignments()
+end
+
+function UniversalLuaStateViewer:hookGlobalAssignments()
+    -- Create a wrapper for _G
+    local globalEnv = getfenv and getfenv(2) or _G
+    local globalMeta = getmetatable(globalEnv) or {}
+    local originalNewIndex = globalMeta.__newindex
+    
+    globalMeta.__newindex = function(t, k, v)
+        self:recordGlobalChange(k, v, "assignment")
+        if originalNewIndex then
+            originalNewIndex(t, k, v)
+        else
+            rawset(t, k, v)
+        end
+    end
+    
+    -- Try to set the metatable aggressively
     pcall(function()
-        debug.sethook(function(event, line)
-            if event == "call" then
-                self:recordFunctionCall(2)
-            elseif event == "return" then
-                self:recordFunctionReturn(2)
-            end
-        end, "cr", 0)
+        setmetatable(globalEnv, globalMeta)
     end)
 end
 
-function UniversalLuaStateViewer:captureInitialState()
-    -- Capture initial global environment
-    self:captureTable(_G, "_G")
+function UniversalLuaStateViewer:monitorGlobalEnvironment()
+    local globalEnv = getfenv and getfenv(2) or _G
+    self:captureTable(globalEnv, "_G")
     
-    -- Capture existing functions in _G
-    for name, value in pairs(_G) do
-        if type(value) == "function" then
-            self:captureClosure(value, name, "global_initial")
-        elseif type(value) == "table" then
-            self:captureTable(value, "global_table_" .. name)
+    -- Monitor all existing globals
+    for k, v in pairs(globalEnv) do
+        if type(v) == "function" then
+            self:captureClosure(v, k, "global_function")
+        elseif type(v) == "table" then
+            self:captureTable(v, "global_table_" .. k)
+        end
+    end
+end
+
+function UniversalLuaStateViewer:captureInitialState()
+    print("Capturing initial VM state...")
+    
+    -- Capture all loaded modules
+    self:captureLoadedModules()
+    
+    -- Capture all existing functions in environment
+    self:captureExistingFunctions()
+    
+    -- Capture all known tables
+    self:captureKnownTables()
+end
+
+function UniversalLuaStateViewer:captureLoadedModules()
+    -- Try to find and capture already loaded modules
+    local globalEnv = getfenv and getfenv(2) or _G
+    for k, v in pairs(globalEnv) do
+        if type(v) == "table" and string.find(k:lower(), "module") then
+            state.modules[k] = {
+                name = k,
+                result = v,
+                success = true,
+                timestamp = tick(),
+                type = "table"
+            }
+            self:captureTable(v, "preloaded_module_" .. k)
+        end
+    end
+end
+
+function UniversalLuaStateViewer:captureExistingFunctions()
+    -- Use debug.getregistry to find functions
+    local success, registry = pcall(function()
+        return debug.getregistry()
+    end)
+    
+    if success and type(registry) == "table" then
+        for k, v in pairs(registry) do
+            if type(v) == "function" then
+                self:captureClosure(v, "registry_function_" .. tostring(k), "debug_registry")
+            end
+        end
+    end
+end
+
+function UniversalLuaStateViewer:captureKnownTables()
+    -- Capture common Roblox tables
+    local importantTables = {
+        "workspace", "game", "script", "shared", 
+        "ReplicatedStorage", "ServerScriptService", "ServerStorage",
+        "Players", "Lighting", "SoundService"
+    }
+    
+    for _, name in ipairs(importantTables) do
+        local success, value = pcall(function()
+            return game:GetService(name)
+        end)
+        if success and value then
+            self:captureTable(value, "service_" .. name)
         end
     end
 end
 
 -- =========================================
--- SAFE CAPTURE FUNCTIONS
+-- AGGRESSIVE CAPTURE FUNCTIONS
 -- =========================================
 
 function UniversalLuaStateViewer:captureClosure(func, name, source)
     local closureId = tostring(func):gsub("function: ", "")
     
     if not state.closures[closureId] then
+        print("Capturing closure:", name, closureId)
+        
         state.closures[closureId] = {
             id = closureId,
             name = name or "anonymous",
@@ -163,6 +348,7 @@ function UniversalLuaStateViewer:captureClosure(func, name, source)
         }
         
         self:captureUpvalues(func, closureId)
+        self:captureEnvironment(func, closureId)
     end
     
     return closureId
@@ -185,11 +371,24 @@ function UniversalLuaStateViewer:captureUpvalues(func, closureId)
         
         if type(value) == "table" then
             self:captureTable(value, name .. "_upvalue")
+        elseif type(value) == "function" then
+            self:captureClosure(value, name .. "_upvalue_func", "upvalue")
         end
     end
     
     state.closures[closureId].upvalues = upvalueInfo
     state.upvalues[closureId] = upvalueInfo
+end
+
+function UniversalLuaStateViewer:captureEnvironment(func, closureId)
+    local success, env = pcall(getfenv, func)
+    if success and env then
+        state.closures[closureId].environment = {
+            type = type(env),
+            value = tostring(env)
+        }
+        self:captureTable(env, "env_" .. closureId)
+    end
 end
 
 function UniversalLuaStateViewer:captureTable(tbl, name, visited, depth)
@@ -201,14 +400,16 @@ function UniversalLuaStateViewer:captureTable(tbl, name, visited, depth)
         return visited[tbl].id
     end
     
-    -- Depth limit to prevent freezing
-    if depth > 3 then
-        return "depth_limit_reached"
+    -- Depth limit
+    if depth > 5 then
+        return "depth_limit"
     end
     
     local tableId = tostring(tbl)
     
     if not state.tables[tableId] then
+        print("Capturing table:", name, tableId)
+        
         state.tables[tableId] = {
             id = tableId,
             name = name or "anonymous_table",
@@ -222,7 +423,7 @@ function UniversalLuaStateViewer:captureTable(tbl, name, visited, depth)
         visited[tbl] = state.tables[tableId]
         self:captureTableContents(tbl, tableId, visited, depth)
         
-        -- Safely check for metatable without modifying it
+        -- Try to capture metatable aggressively
         pcall(function()
             local mt = getmetatable(tbl)
             if mt then
@@ -238,9 +439,11 @@ function UniversalLuaStateViewer:captureTableContents(tbl, tableId, visited, dep
     local elements = {}
     local count = 0
     
+    -- Use aggressive iteration
     for k, v in pairs(tbl) do
         count = count + 1
-        elements[tostring(k)] = {
+        local keyStr = tostring(k)
+        elements[keyStr] = {
             key = k,
             value = v,
             keyType = type(k),
@@ -248,12 +451,12 @@ function UniversalLuaStateViewer:captureTableContents(tbl, tableId, visited, dep
             captured = false
         }
         
-        -- Recursively capture nested tables with depth limit
+        -- Recursively capture
         if type(v) == "table" then
-            elements[tostring(k)].captured = true
-            self:captureTable(v, "nested_table_" .. tableId, visited, depth + 1)
+            elements[keyStr].captured = true
+            self:captureTable(v, "nested_" .. tableId, visited, depth + 1)
         elseif type(v) == "function" then
-            self:captureClosure(v, "table_function_" .. tableId, "table_element")
+            self:captureClosure(v, "table_func_" .. keyStr, "table_element")
         end
     end
     
@@ -271,17 +474,87 @@ function UniversalLuaStateViewer:captureMetatable(mt, originalTable)
         timestamp = tick()
     }
     
-    -- Safely capture metamethods
-    pcall(function()
-        for method, func in pairs(mt) do
-            if type(func) == "function" then
-                state.metatables[mtId].methods[method] = {
-                    name = method,
-                    closureId = self:captureClosure(func, method .. "_metamethod")
-                }
-            end
+    -- Aggressively capture metamethods
+    for method, func in pairs(mt) do
+        if type(func) == "function" then
+            state.metatables[mtId].methods[method] = {
+                name = method,
+                closureId = self:captureClosure(func, method .. "_metamethod", "metatable")
+            }
         end
-    end)
+    end
+end
+
+-- =========================================
+-- EXECUTION TRACING
+-- =========================================
+
+function UniversalLuaStateViewer:recordFunctionCall(level)
+    local info = debug.getinfo(level, "nS")
+    if info then
+        local call = {
+            type = "call",
+            name = info.name or "anonymous",
+            source = info.source,
+            linedefined = info.linedefined,
+            timestamp = tick(),
+            stack = self:getStackTrace()
+        }
+        table.insert(state.execution, call)
+        
+        -- Capture the function if it's new
+        if info.func then
+            self:captureClosure(info.func, info.name or "call_capture", "execution_trace")
+        end
+    end
+end
+
+function UniversalLuaStateViewer:recordFunctionReturn(level)
+    local info = debug.getinfo(level, "nS")
+    if info then
+        local returnRecord = {
+            type = "return",
+            name = info.name or "anonymous",
+            source = info.source,
+            timestamp = tick(),
+            stack = self:getStackTrace()
+        }
+        table.insert(state.execution, returnRecord)
+    end
+end
+
+function UniversalLuaStateViewer:recordLineExecution(line)
+    local executionRecord = {
+        type = "line",
+        line = line,
+        timestamp = tick(),
+        stack = self:getStackTrace()
+    }
+    table.insert(state.execution, executionRecord)
+end
+
+function UniversalLuaStateViewer:recordTableChange(tableId, key, value, operation)
+    local change = {
+        tableId = tableId,
+        key = key,
+        value = value,
+        operation = operation,
+        timestamp = tick(),
+        stack = self:getStackTrace()
+    }
+    table.insert(state.execution, change)
+end
+
+function UniversalLuaStateViewer:recordGlobalChange(key, value, operation)
+    local change = {
+        type = "global",
+        key = key,
+        value = value,
+        operation = operation,
+        timestamp = tick(),
+        stack = self:getStackTrace()
+    }
+    table.insert(state.execution, change)
 end
 
 -- =========================================
@@ -314,7 +587,7 @@ end
 
 function UniversalLuaStateViewer:getStackTrace()
     local stack = {}
-    for i = 3, 10 do
+    for i = 3, 15 do
         local info = debug.getinfo(i, "nSl")
         if not info then break end
         table.insert(stack, {
@@ -326,33 +599,10 @@ function UniversalLuaStateViewer:getStackTrace()
     return stack
 end
 
-function UniversalLuaStateViewer:recordFunctionCall(level)
-    local info = debug.getinfo(level, "nS")
-    if info then
-        local call = {
-            type = "call",
-            name = info.name or "anonymous",
-            source = info.source,
-            linedefined = info.linedefined,
-            timestamp = tick(),
-            stack = self:getStackTrace()
-        }
-        table.insert(state.execution, call)
-    end
-end
-
-function UniversalLuaStateViewer:recordFunctionReturn(level)
-    local info = debug.getinfo(level, "nS")
-    if info then
-        local returnRecord = {
-            type = "return",
-            name = info.name or "anonymous",
-            source = info.source,
-            timestamp = tick(),
-            stack = self:getStackTrace()
-        }
-        table.insert(state.execution, returnRecord)
-    end
+function UniversalLuaStateViewer:countTable(tbl)
+    local count = 0
+    for _ in pairs(tbl) do count = count + 1 end
+    return count
 end
 
 -- =========================================
@@ -400,7 +650,7 @@ function UniversalLuaStateViewer:takeSnapshot(name)
 end
 
 -- =========================================
--- PROFESSIONAL GUI CREATION (Auto-Open)
+-- GUI CREATION (Auto-Open)
 -- =========================================
 
 function UniversalLuaStateViewer:createGUI()
@@ -431,7 +681,7 @@ function UniversalLuaStateViewer:createGUI()
     title.Size = UDim2.new(0.6, 0, 1, 0)
     title.BackgroundTransparency = 1
     title.TextColor3 = colors.text
-    title.Text = "Universal Lua State Viewer"
+    title.Text = "Universal Lua State Viewer - INTRUSIVE MODE"
     title.Font = Enum.Font.GothamBold
     title.TextSize = 16
     title.TextXAlignment = Enum.TextXAlignment.Left
@@ -452,7 +702,11 @@ function UniversalLuaStateViewer:createGUI()
         self:toggleMinimize()
     end)
     
-    local closeBtn = self:createControlButton("×", controlFrame, 1, function()
+    local refreshBtn = self:createControlButton("↻", controlFrame, 1, function()
+        self:refreshCapture()
+    end)
+    
+    local closeBtn = self:createControlButton("×", controlFrame, 2, function()
         self:stop()
     end)
     
@@ -468,17 +722,36 @@ function UniversalLuaStateViewer:createGUI()
     statusText.Size = UDim2.new(1, -20, 1, 0)
     statusText.Position = UDim2.new(0, 10, 0, 0)
     statusText.BackgroundTransparency = 1
-    statusText.TextColor3 = colors.textSecondary
-    statusText.Text = "Ready - Monitoring VM State"
+    statusText.TextColor3 = colors.success
+    statusText.Text = "INTRUSIVE MODE - Aggressively capturing VM state"
     statusText.Font = Enum.Font.Gotham
     statusText.TextSize = 12
     statusText.TextXAlignment = Enum.TextXAlignment.Left
     statusText.Parent = statusBar
     
+    -- Stats Bar
+    local statsBar = Instance.new("Frame")
+    statsBar.Size = UDim2.new(1, 0, 0, 25)
+    statsBar.Position = UDim2.new(0, 0, 0, 65)
+    statsBar.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    statsBar.BorderSizePixel = 0
+    statsBar.Parent = mainContainer
+    
+    local statsText = Instance.new("TextLabel")
+    statsText.Size = UDim2.new(1, -20, 1, 0)
+    statsText.Position = UDim2.new(0, 10, 0, 0)
+    statsText.BackgroundTransparency = 1
+    statsText.TextColor3 = colors.textSecondary
+    statsText.Text = "Closures: 0 | Tables: 0 | Modules: 0 | Executions: 0"
+    statsText.Font = Enum.Font.Gotham
+    statsText.TextSize = 11
+    statsText.TextXAlignment = Enum.TextXAlignment.Left
+    statsText.Parent = statsBar
+    
     -- Main Content Area
     local contentArea = Instance.new("Frame")
-    contentArea.Size = UDim2.new(1, 0, 1, -65)
-    contentArea.Position = UDim2.new(0, 0, 0, 65)
+    contentArea.Size = UDim2.new(1, 0, 1, -90)
+    contentArea.Position = UDim2.new(0, 0, 0, 90)
     contentArea.BackgroundTransparency = 1
     contentArea.Parent = mainContainer
     
@@ -506,8 +779,12 @@ function UniversalLuaStateViewer:createGUI()
     self.gui = screenGui
     self.mainContainer = mainContainer
     self.statusText = statusText
+    self.statsText = statsText
     self.originalSize = mainContainer.Size
     self.originalPosition = mainContainer.Position
+    
+    -- Start stats update loop
+    self:startStatsUpdate()
 end
 
 function UniversalLuaStateViewer:createControlButton(symbol, parent, index, callback)
@@ -528,15 +805,12 @@ end
 
 function UniversalLuaStateViewer:createSidebarTabs(sidebar, contentFrame)
     local tabs = {
-        {"Closures", "📋", "View all captured functions"},
-        {"Upvalues", "🔗", "Inspect closure upvalues"}, 
-        {"Tables", "🗂️", "Monitor table mutations"},
-        {"Modules", "📦", "Require calls and results"},
-        {"Metatables", "⚙️", "Metatable configurations"},
-        {"Globals", "🌐", "Global environment changes"},
-        {"Constants", "🔢", "Function constants"},
-        {"Diff", "🔄", "Compare snapshots"},
-        {"Search", "🔍", "Search across all data"}
+        {"Dashboard", "📊", "VM State Overview"},
+        {"Closures", "📋", "All captured functions"},
+        {"Tables", "🗂️", "Table mutations"},
+        {"Modules", "📦", "Require calls"},
+        {"Execution", "⚡", "Function calls & returns"},
+        {"Search", "🔍", "Search everything"}
     }
     
     local tabButtons = Instance.new("ScrollingFrame")
@@ -606,25 +880,15 @@ function UniversalLuaStateViewer:createSidebarTabs(sidebar, contentFrame)
     
     tabButtons.CanvasSize = UDim2.new(0, 0, 0, #tabs * 55)
     
-    -- Show first tab by default
-    self:showTabContent("Closures", contentFrame)
+    -- Show dashboard by default
+    self:showTabContent("Dashboard", contentFrame)
 end
 
--- [Rest of the GUI functions remain the same as previous version - they're safe]
--- Including: showTabContent, createClosureView, createUpvalueView, createTableView, 
--- createModuleView, createMetatableView, createGlobalsView, createConstantsView,
--- createDiffView, createSearchView, makeDraggable, toggleMinimize, etc.
-
--- For brevity, I'll include the key GUI functions but skip the very long ones
--- You can copy the GUI functions from the previous working version
-
 function UniversalLuaStateViewer:showTabContent(tabName, contentFrame)
-    -- Clear existing content
     for _, child in ipairs(contentFrame:GetChildren()) do
         child:Destroy()
     end
     
-    -- Tab Header
     local header = Instance.new("Frame")
     header.Size = UDim2.new(1, 0, 0, 40)
     header.BackgroundColor3 = colors.header
@@ -642,36 +906,161 @@ function UniversalLuaStateViewer:showTabContent(tabName, contentFrame)
     headerText.TextXAlignment = Enum.TextXAlignment.Left
     headerText.Parent = header
     
-    -- Content Area
     local content = Instance.new("Frame")
     content.Size = UDim2.new(1, 0, 1, -40)
     content.Position = UDim2.new(0, 0, 0, 40)
     content.BackgroundTransparency = 1
     content.Parent = contentFrame
     
-    -- Simple content for each tab (you can expand these)
-    if tabName == "Closures" then
-        self:createSimpleListView(content, state.closures, "Closures")
-    elseif tabName == "Upvalues" then
-        self:createSimpleListView(content, state.upvalues, "Upvalue Sets")
+    if tabName == "Dashboard" then
+        self:createDashboardView(content)
+    elseif tabName == "Closures" then
+        self:createClosuresView(content)
     elseif tabName == "Tables" then
-        self:createSimpleListView(content, state.tables, "Tables")
+        self:createTablesView(content)
     elseif tabName == "Modules" then
-        self:createSimpleListView(content, state.modules, "Modules")
-    elseif tabName == "Metatables" then
-        self:createSimpleListView(content, state.metatables, "Metatables")
-    elseif tabName == "Globals" then
-        self:createSimpleListView(content, state.globals, "Globals")
-    elseif tabName == "Constants" then
-        self:showConstantsView(content)
-    elseif tabName == "Diff" then
-        self:createDiffView(content)
+        self:createModulesView(content)
+    elseif tabName == "Execution" then
+        self:createExecutionView(content)
     elseif tabName == "Search" then
         self:createSearchView(content)
     end
 end
 
-function UniversalLuaStateViewer:createSimpleListView(parent, data, title)
+function UniversalLuaStateViewer:createDashboardView(parent)
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, 0, 1, 0)
+    scroll.BackgroundTransparency = 1
+    scroll.ScrollBarThickness = 8
+    scroll.Parent = parent
+    
+    local layout = Instance.new("UIListLayout")
+    layout.Parent = scroll
+    
+    -- Summary Cards
+    local cards = {
+        {title = "Closures", count = self:countTable(state.closures), color = colors.success, icon = "📋"},
+        {title = "Tables", count = self:countTable(state.tables), color = colors.accent, icon = "🗂️"},
+        {title = "Modules", count = self:countTable(state.modules), color = colors.warning, icon = "📦"},
+        {title = "Executions", count = #state.execution, color = colors.error, icon = "⚡"},
+        {title = "Upvalues", count = self:countTable(state.upvalues), color = colors.success, icon = "🔗"},
+        {title = "Metatables", count = self:countTable(state.metatables), color = colors.accent, icon = "⚙️"}
+    }
+    
+    for i, card in ipairs(cards) do
+        local cardFrame = Instance.new("Frame")
+        cardFrame.Size = UDim2.new(0.45, 0, 0, 80)
+        cardFrame.Position = UDim2.new((i-1) % 2 * 0.5, 10, math.floor((i-1)/2) * 0.25, 10)
+        cardFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
+        cardFrame.BorderSizePixel = 0
+        cardFrame.Parent = scroll
+        
+        local iconLabel = Instance.new("TextLabel")
+        iconLabel.Size = UDim2.new(0.2, 0, 1, 0)
+        iconLabel.BackgroundTransparency = 1
+        iconLabel.TextColor3 = card.color
+        iconLabel.Text = card.icon
+        iconLabel.Font = Enum.Font.Gotham
+        iconLabel.TextSize = 24
+        iconLabel.Parent = cardFrame
+        
+        local titleLabel = Instance.new("TextLabel")
+        titleLabel.Size = UDim2.new(0.8, 0, 0.5, 0)
+        titleLabel.Position = UDim2.new(0.2, 0, 0, 0)
+        titleLabel.BackgroundTransparency = 1
+        titleLabel.TextColor3 = colors.text
+        titleLabel.Text = card.title
+        titleLabel.Font = Enum.Font.GothamBold
+        titleLabel.TextSize = 16
+        titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+        titleLabel.Parent = cardFrame
+        
+        local countLabel = Instance.new("TextLabel")
+        countLabel.Size = UDim2.new(0.8, 0, 0.5, 0)
+        countLabel.Position = UDim2.new(0.2, 0, 0.5, 0)
+        countLabel.BackgroundTransparency = 1
+        countLabel.TextColor3 = card.color
+        countLabel.Text = tostring(card.count)
+        countLabel.Font = Enum.Font.GothamBold
+        countLabel.TextSize = 20
+        countLabel.TextXAlignment = Enum.TextXAlignment.Left
+        countLabel.Parent = cardFrame
+    end
+    
+    -- Recent Activity
+    local activityFrame = Instance.new("Frame")
+    activityFrame.Size = UDim2.new(1, -20, 0, 200)
+    activityFrame.Position = UDim2.new(0, 10, 0, 250)
+    activityFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
+    activityFrame.BorderSizePixel = 0
+    activityFrame.Parent = scroll
+    
+    local activityTitle = Instance.new("TextLabel")
+    activityTitle.Size = UDim2.new(1, 0, 0, 30)
+    activityTitle.BackgroundTransparency = 1
+    activityTitle.TextColor3 = colors.text
+    activityTitle.Text = "Recent Activity"
+    activityTitle.Font = Enum.Font.GothamBold
+    activityTitle.TextSize = 16
+    activityTitle.Parent = activityFrame
+    
+    local activityScroll = Instance.new("ScrollingFrame")
+    activityScroll.Size = UDim2.new(1, -10, 1, -40)
+    activityScroll.Position = UDim2.new(0, 5, 0, 35)
+    activityScroll.BackgroundTransparency = 1
+    activityScroll.ScrollBarThickness = 4
+    activityScroll.Parent = activityFrame
+    
+    local activityLayout = Instance.new("UIListLayout")
+    activityLayout.Parent = activityScroll
+    
+    -- Show recent executions
+    for i = math.max(1, #state.execution - 10), #state.execution do
+        local exec = state.execution[i]
+        if exec then
+            local execFrame = Instance.new("Frame")
+            execFrame.Size = UDim2.new(1, 0, 0, 25)
+            execFrame.BackgroundTransparency = 1
+            execFrame.Parent = activityScroll
+            
+            local typeLabel = Instance.new("TextLabel")
+            typeLabel.Size = UDim2.new(0.2, 0, 1, 0)
+            typeLabel.BackgroundTransparency = 1
+            typeLabel.TextColor3 = colors.accent
+            typeLabel.Text = exec.type
+            typeLabel.Font = Enum.Font.Gotham
+            typeLabel.TextSize = 12
+            typeLabel.TextXAlignment = Enum.TextXAlignment.Left
+            typeLabel.Parent = execFrame
+            
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Size = UDim2.new(0.6, 0, 1, 0)
+            nameLabel.Position = UDim2.new(0.2, 0, 0, 0)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.TextColor3 = colors.text
+            nameLabel.Text = exec.name or "anonymous"
+            nameLabel.Font = Enum.Font.Gotham
+            nameLabel.TextSize = 12
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            nameLabel.Parent = execFrame
+            
+            local timeLabel = Instance.new("TextLabel")
+            timeLabel.Size = UDim2.new(0.2, 0, 1, 0)
+            timeLabel.Position = UDim2.new(0.8, 0, 0, 0)
+            timeLabel.BackgroundTransparency = 1
+            timeLabel.TextColor3 = colors.textSecondary
+            timeLabel.Text = os.date("%H:%M:%S", exec.timestamp)
+            timeLabel.Font = Enum.Font.Gotham
+            timeLabel.TextSize = 10
+            timeLabel.TextXAlignment = Enum.TextXAlignment.Right
+            timeLabel.Parent = execFrame
+        end
+    end
+    
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 500)
+end
+
+function UniversalLuaStateViewer:createClosuresView(parent)
     local scroll = Instance.new("ScrollingFrame")
     scroll.Size = UDim2.new(1, 0, 1, 0)
     scroll.BackgroundTransparency = 1
@@ -682,155 +1071,256 @@ function UniversalLuaStateViewer:createSimpleListView(parent, data, title)
     layout.Parent = scroll
     
     local count = 0
-    for id, item in pairs(data) do
-        local itemFrame = Instance.new("Frame")
-        itemFrame.Size = UDim2.new(1, -20, 0, 60)
-        itemFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
-        itemFrame.BorderSizePixel = 0
-        itemFrame.Parent = scroll
+    for id, closure in pairs(state.closures) do
+        local closureFrame = Instance.new("Frame")
+        closureFrame.Size = UDim2.new(1, -20, 0, 80)
+        closureFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
+        closureFrame.BorderSizePixel = 0
+        closureFrame.Parent = scroll
         
         local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(1, -20, 0.6, 0)
+        nameLabel.Size = UDim2.new(1, -20, 0.4, 0)
         nameLabel.Position = UDim2.new(0, 10, 0, 5)
         nameLabel.BackgroundTransparency = 1
         nameLabel.TextColor3 = colors.accent
-        nameLabel.Text = tostring(item.name or id)
+        nameLabel.Text = closure.name .. "  •  " .. id:sub(1, 12) .. "..."
         nameLabel.Font = Enum.Font.GothamBold
         nameLabel.TextSize = 14
         nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-        nameLabel.Parent = itemFrame
+        nameLabel.Parent = closureFrame
         
-        local infoLabel = Instance.new("TextLabel")
-        infoLabel.Size = UDim2.new(1, -20, 0.4, 0)
-        infoLabel.Position = UDim2.new(0, 10, 0.6, 0)
-        infoLabel.BackgroundTransparency = 1
-        infoLabel.TextColor3 = colors.textSecondary
-        infoLabel.Text = "Type: " .. type(item) .. " | ID: " .. tostring(id):sub(1, 10) .. "..."
-        infoLabel.Font = Enum.Font.Gotham
-        infoLabel.TextSize = 11
-        infoLabel.TextXAlignment = Enum.TextXAlignment.Left
-        infoLabel.Parent = itemFrame
+        local sourceLabel = Instance.new("TextLabel")
+        sourceLabel.Size = UDim2.new(1, -20, 0.3, 0)
+        sourceLabel.Position = UDim2.new(0, 10, 0.4, 0)
+        sourceLabel.BackgroundTransparency = 1
+        sourceLabel.TextColor3 = colors.textSecondary
+        sourceLabel.Text = "Source: " .. (closure.source:sub(1, 50) .. (closure.source:len() > 50 and "..." or ""))
+        sourceLabel.Font = Enum.Font.Gotham
+        sourceLabel.TextSize = 11
+        sourceLabel.TextXAlignment = Enum.TextXAlignment.Left
+        sourceLabel.Parent = closureFrame
+        
+        local upvalueLabel = Instance.new("TextLabel")
+        upvalueLabel.Size = UDim2.new(0.5, -10, 0.3, 0)
+        upvalueLabel.Position = UDim2.new(0, 10, 0.7, 0)
+        upvalueLabel.BackgroundTransparency = 1
+        upvalueLabel.TextColor3 = colors.textSecondary
+        upvalueLabel.Text = "Upvalues: " .. self:countTable(closure.upvalues)
+        upvalueLabel.Font = Enum.Font.Gotham
+        upvalueLabel.TextSize = 11
+        upvalueLabel.TextXAlignment = Enum.TextXAlignment.Left
+        upvalueLabel.Parent = closureFrame
+        
+        local timeLabel = Instance.new("TextLabel")
+        timeLabel.Size = UDim2.new(0.5, -10, 0.3, 0)
+        timeLabel.Position = UDim2.new(0.5, 0, 0.7, 0)
+        timeLabel.BackgroundTransparency = 1
+        timeLabel.TextColor3 = colors.textSecondary
+        timeLabel.Text = "Captured: " .. os.date("%H:%M:%S", closure.timestamp)
+        timeLabel.Font = Enum.Font.Gotham
+        timeLabel.TextSize = 11
+        timeLabel.TextXAlignment = Enum.TextXAlignment.Right
+        timeLabel.Parent = closureFrame
+        
+        count = count + 1
+    end
+    
+    scroll.CanvasSize = UDim2.new(0, 0, 0, count * 85)
+end
+
+function UniversalLuaStateViewer:createTablesView(parent)
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, 0, 1, 0)
+    scroll.BackgroundTransparency = 1
+    scroll.ScrollBarThickness = 8
+    scroll.Parent = parent
+    
+    local layout = Instance.new("UIListLayout")
+    layout.Parent = scroll
+    
+    local count = 0
+    for id, tbl in pairs(state.tables) do
+        local tableFrame = Instance.new("Frame")
+        tableFrame.Size = UDim2.new(1, -20, 0, 60)
+        tableFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
+        tableFrame.BorderSizePixel = 0
+        tableFrame.Parent = scroll
+        
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, -20, 0.5, 0)
+        nameLabel.Position = UDim2.new(0, 10, 0, 5)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.TextColor3 = colors.accent
+        nameLabel.Text = tbl.name .. "  •  " .. id:sub(1, 12) .. "..."
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 14
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.Parent = tableFrame
+        
+        local sizeLabel = Instance.new("TextLabel")
+        sizeLabel.Size = UDim2.new(0.5, -10, 0.5, 0)
+        sizeLabel.Position = UDim2.new(0, 10, 0.5, 0)
+        sizeLabel.BackgroundTransparency = 1
+        sizeLabel.TextColor3 = colors.textSecondary
+        sizeLabel.Text = "Size: " .. tbl.size .. " elements"
+        sizeLabel.Font = Enum.Font.Gotham
+        sizeLabel.TextSize = 11
+        sizeLabel.TextXAlignment = Enum.TextXAlignment.Left
+        sizeLabel.Parent = tableFrame
+        
+        local timeLabel = Instance.new("TextLabel")
+        timeLabel.Size = UDim2.new(0.5, -10, 0.5, 0)
+        timeLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
+        timeLabel.BackgroundTransparency = 1
+        timeLabel.TextColor3 = colors.textSecondary
+        timeLabel.Text = "Created: " .. os.date("%H:%M:%S", tbl.timestamp)
+        timeLabel.Font = Enum.Font.Gotham
+        timeLabel.TextSize = 11
+        timeLabel.TextXAlignment = Enum.TextXAlignment.Right
+        timeLabel.Parent = tableFrame
         
         count = count + 1
     end
     
     scroll.CanvasSize = UDim2.new(0, 0, 0, count * 65)
-    
-    if count == 0 then
-        local emptyLabel = Instance.new("TextLabel")
-        emptyLabel.Size = UDim2.new(1, 0, 1, 0)
-        emptyLabel.BackgroundTransparency = 1
-        emptyLabel.TextColor3 = colors.textSecondary
-        emptyLabel.Text = "No " .. title .. " captured yet"
-        emptyLabel.Font = Enum.Font.Gotham
-        emptyLabel.TextSize = 14
-        emptyLabel.Parent = parent
-    end
 end
 
-function UniversalLuaStateViewer:showConstantsView(parent)
-    local totalConstants = 0
-    for _, closure in pairs(state.closures) do
-        totalConstants = totalConstants + #closure.constants
+function UniversalLuaStateViewer:createModulesView(parent)
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, 0, 1, 0)
+    scroll.BackgroundTransparency = 1
+    scroll.ScrollBarThickness = 8
+    scroll.Parent = parent
+    
+    local layout = Instance.new("UIListLayout")
+    layout.Parent = scroll
+    
+    local count = 0
+    for name, module in pairs(state.modules) do
+        local moduleFrame = Instance.new("Frame")
+        moduleFrame.Size = UDim2.new(1, -20, 0, 80)
+        moduleFrame.BackgroundColor3 = module.success and Color3.fromRGB(45, 45, 58) or Color3.fromRGB(58, 45, 45)
+        moduleFrame.BorderSizePixel = 0
+        moduleFrame.Parent = scroll
+        
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, -20, 0.3, 0)
+        nameLabel.Position = UDim2.new(0, 10, 0, 5)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.TextColor3 = module.success and colors.accent or colors.error
+        nameLabel.Text = "Module: " .. name
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 14
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.Parent = moduleFrame
+        
+        local statusLabel = Instance.new("TextLabel")
+        statusLabel.Size = UDim2.new(0.5, -10, 0.3, 0)
+        statusLabel.Position = UDim2.new(0, 10, 0.3, 0)
+        statusLabel.BackgroundTransparency = 1
+        statusLabel.TextColor3 = module.success and colors.success or colors.error
+        statusLabel.Text = module.success and "✓ Success" or "✗ Failed"
+        statusLabel.Font = Enum.Font.Gotham
+        statusLabel.TextSize = 12
+        statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        statusLabel.Parent = moduleFrame
+        
+        local typeLabel = Instance.new("TextLabel")
+        typeLabel.Size = UDim2.new(0.5, -10, 0.3, 0)
+        typeLabel.Position = UDim2.new(0.5, 0, 0.3, 0)
+        typeLabel.BackgroundTransparency = 1
+        typeLabel.TextColor3 = colors.textSecondary
+        typeLabel.Text = "Type: " .. module.type
+        typeLabel.Font = Enum.Font.Gotham
+        typeLabel.TextSize = 12
+        typeLabel.TextXAlignment = Enum.TextXAlignment.Right
+        typeLabel.Parent = moduleFrame
+        
+        local timeLabel = Instance.new("TextLabel")
+        timeLabel.Size = UDim2.new(1, -20, 0.4, 0)
+        timeLabel.Position = UDim2.new(0, 10, 0.6, 0)
+        timeLabel.BackgroundTransparency = 1
+        timeLabel.TextColor3 = colors.textSecondary
+        timeLabel.Text = "Loaded: " .. os.date("%H:%M:%S", module.timestamp)
+        timeLabel.Font = Enum.Font.Gotham
+        timeLabel.TextSize = 11
+        timeLabel.TextXAlignment = Enum.TextXAlignment.Left
+        timeLabel.Parent = moduleFrame
+        
+        count = count + 1
     end
     
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = colors.text
-    label.Text = "Total Constants Captured: " .. totalConstants .. "\n\nConstants are captured within each closure's details."
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 14
-    label.TextYAlignment = Enum.TextYAlignment.Top
-    label.Parent = parent
+    scroll.CanvasSize = UDim2.new(0, 0, 0, count * 85)
 end
 
-function UniversalLuaStateViewer:createDiffView(parent)
-    local controlBar = Instance.new("Frame")
-    controlBar.Size = UDim2.new(1, 0, 0, 50)
-    controlBar.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    controlBar.BorderSizePixel = 0
-    controlBar.Parent = parent
+function UniversalLuaStateViewer:createExecutionView(parent)
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, 0, 1, 0)
+    scroll.BackgroundTransparency = 1
+    scroll.ScrollBarThickness = 8
+    scroll.Parent = parent
     
-    local snapshotButton = Instance.new("TextButton")
-    snapshotButton.Size = UDim2.new(0.2, 0, 0.6, 0)
-    snapshotButton.Position = UDim2.new(0.05, 0, 0.2, 0)
-    snapshotButton.BackgroundColor3 = colors.accent
-    snapshotButton.TextColor3 = colors.text
-    snapshotButton.Text = "Take Snapshot"
-    snapshotButton.Font = Enum.Font.GothamBold
-    snapshotButton.TextSize = 12
-    snapshotButton.Parent = controlBar
+    local layout = Instance.new("UIListLayout")
+    layout.Parent = scroll
     
-    local snapshotCount = Instance.new("TextLabel")
-    snapshotCount.Size = UDim2.new(0.2, 0, 1, 0)
-    snapshotCount.Position = UDim2.new(0.3, 0, 0, 0)
-    snapshotCount.BackgroundTransparency = 1
-    snapshotCount.TextColor3 = colors.text
-    snapshotCount.Text = "Snapshots: " .. #state.snapshots
-    snapshotCount.Font = Enum.Font.Gotham
-    snapshotCount.TextSize = 12
-    snapshotCount.Parent = controlBar
-    
-    local diffDisplay = Instance.new("ScrollingFrame")
-    diffDisplay.Size = UDim2.new(1, -20, 1, -60)
-    diffDisplay.Position = UDim2.new(0, 10, 0, 50)
-    diffDisplay.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    diffDisplay.Parent = parent
-    
-    snapshotButton.MouseButton1Click:Connect(function()
-        self:takeSnapshot("Manual_" .. os.time())
-        snapshotCount.Text = "Snapshots: " .. #state.snapshots
+    for i, exec in ipairs(state.execution) do
+        local execFrame = Instance.new("Frame")
+        execFrame.Size = UDim2.new(1, -20, 0, 40)
+        execFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
+        execFrame.BorderSizePixel = 0
+        execFrame.Parent = scroll
         
-        -- Simple diff display
-        for _, child in ipairs(diffDisplay:GetChildren()) do
-            child:Destroy()
-        end
+        local typeLabel = Instance.new("TextLabel")
+        typeLabel.Size = UDim2.new(0.15, 0, 1, 0)
+        typeLabel.BackgroundTransparency = 1
+        typeLabel.TextColor3 = colors.accent
+        typeLabel.Text = exec.type
+        typeLabel.Font = Enum.Font.GothamBold
+        typeLabel.TextSize = 12
+        typeLabel.TextXAlignment = Enum.TextXAlignment.Left
+        typeLabel.Parent = execFrame
         
-        if #state.snapshots < 2 then
-            local noDiff = Instance.new("TextLabel")
-            noDiff.Size = UDim2.new(1, 0, 1, 0)
-            noDiff.BackgroundTransparency = 1
-            noDiff.TextColor3 = colors.textSecondary
-            noDiff.Text = "Take at least 2 snapshots to see differences"
-            noDiff.Font = Enum.Font.Gotham
-            noDiff.TextSize = 14
-            noDiff.Parent = diffDisplay
-        else
-            local latest = state.snapshots[#state.snapshots]
-            local label = Instance.new("TextLabel")
-            label.Size = UDim2.new(1, 0, 0, 30)
-            label.BackgroundTransparency = 1
-            label.TextColor3 = colors.success
-            label.Text = "Latest Snapshot: " .. latest.name
-            label.Font = Enum.Font.Gotham
-            label.TextSize = 14
-            label.Parent = diffDisplay
-        end
-    end)
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(0.6, 0, 1, 0)
+        nameLabel.Position = UDim2.new(0.15, 0, 0, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.TextColor3 = colors.text
+        nameLabel.Text = exec.name or "anonymous"
+        nameLabel.Font = Enum.Font.Gotham
+        nameLabel.TextSize = 12
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.Parent = execFrame
+        
+        local timeLabel = Instance.new("TextLabel")
+        timeLabel.Size = UDim2.new(0.25, 0, 1, 0)
+        timeLabel.Position = UDim2.new(0.75, 0, 0, 0)
+        timeLabel.BackgroundTransparency = 1
+        timeLabel.TextColor3 = colors.textSecondary
+        timeLabel.Text = os.date("%H:%M:%S", exec.timestamp)
+        timeLabel.Font = Enum.Font.Gotham
+        timeLabel.TextSize = 10
+        timeLabel.TextXAlignment = Enum.TextXAlignment.Right
+        timeLabel.Parent = execFrame
+    end
+    
+    scroll.CanvasSize = UDim2.new(0, 0, 0, #state.execution * 45)
 end
 
 function UniversalLuaStateViewer:createSearchView(parent)
-    local searchContainer = Instance.new("Frame")
-    searchContainer.Size = UDim2.new(1, 0, 0, 60)
-    searchContainer.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    searchContainer.BorderSizePixel = 0
-    searchContainer.Parent = parent
-    
     local searchBox = Instance.new("TextBox")
-    searchBox.Size = UDim2.new(0.8, 0, 0.5, 0)
-    searchBox.Position = UDim2.new(0.1, 0, 0.25, 0)
+    searchBox.Size = UDim2.new(0.8, 0, 0, 40)
+    searchBox.Position = UDim2.new(0.1, 0, 0, 10)
     searchBox.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
     searchBox.TextColor3 = colors.text
-    searchBox.PlaceholderText = "🔍 Search across all VM state..."
+    searchBox.PlaceholderText = "🔍 Search closures, tables, modules..."
     searchBox.PlaceholderColor3 = colors.textSecondary
     searchBox.Font = Enum.Font.Gotham
     searchBox.TextSize = 14
-    searchBox.Parent = searchContainer
+    searchBox.Parent = parent
     
     local resultsFrame = Instance.new("ScrollingFrame")
-    resultsFrame.Size = UDim2.new(1, -20, 1, -70)
-    resultsFrame.Position = UDim2.new(0, 10, 0, 60)
+    resultsFrame.Size = UDim2.new(1, -20, 1, -60)
+    resultsFrame.Position = UDim2.new(0, 10, 0, 50)
     resultsFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
     resultsFrame.Parent = parent
     
@@ -851,10 +1341,22 @@ function UniversalLuaStateViewer:createSearchView(parent)
             end
         end
         
+        -- Search tables
+        for id, tbl in pairs(state.tables) do
+            if string.find(tbl.name:lower(), query) then
+                table.insert(results, {type = "Table", name = tbl.name, id = id})
+            end
+        end
+        
+        -- Search modules
+        for name, module in pairs(state.modules) do
+            if string.find(name:lower(), query) then
+                table.insert(results, {type = "Module", name = name, id = name})
+            end
+        end
+        
         -- Display results
         for i, result in ipairs(results) do
-            if i > 20 then break end
-            
             local resultFrame = Instance.new("Frame")
             resultFrame.Size = UDim2.new(1, 0, 0, 40)
             resultFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
@@ -883,7 +1385,7 @@ function UniversalLuaStateViewer:createSearchView(parent)
             nameLabel.Parent = resultFrame
         end
         
-        resultsFrame.CanvasSize = UDim2.new(0, 0, 0, math.min(#results, 20) * 45)
+        resultsFrame.CanvasSize = UDim2.new(0, 0, 0, #results * 45)
     end)
 end
 
@@ -921,21 +1423,42 @@ end
 
 function UniversalLuaStateViewer:toggleMinimize()
     if self.isMinimized then
-        -- Restore
         self.mainContainer.Size = self.originalSize
         self.isMinimized = false
     else
-        -- Minimize
         self.originalSize = self.mainContainer.Size
-        self.mainContainer.Size = UDim2.new(0.3, 0, 0, 65)
+        self.mainContainer.Size = UDim2.new(0.3, 0, 0, 90)
         self.isMinimized = true
     end
 end
 
-function UniversalLuaStateViewer:countTable(tbl)
-    local count = 0
-    for _ in pairs(tbl) do count = count + 1 end
-    return count
+function UniversalLuaStateViewer:refreshCapture()
+    print("Refreshing capture...")
+    self:captureInitialState()
+    self:updateStats()
+end
+
+function UniversalLuaStateViewer:startStatsUpdate()
+    spawn(function()
+        while self.enabled and self.statsText do
+            self:updateStats()
+            wait(2) -- Update every 2 seconds
+        end
+    end)
+end
+
+function UniversalLuaStateViewer:updateStats()
+    if self.statsText then
+        self.statsText.Text = string.format(
+            "Closures: %d | Tables: %d | Modules: %d | Executions: %d | Upvalues: %d | Metatables: %d",
+            self:countTable(state.closures),
+            self:countTable(state.tables),
+            self:countTable(state.modules),
+            #state.execution,
+            self:countTable(state.upvalues),
+            self:countTable(state.metatables)
+        )
+    end
 end
 
 -- =========================================
@@ -943,23 +1466,13 @@ end
 -- =========================================
 
 function UniversalLuaStateViewer:start()
-    local success, err = pcall(function()
-        self:installHooks()
-        self:createGUI() -- AUTO-OPENS GUI!
-        self:takeSnapshot("Initial")
-        
-        if self.statusText then
-            self.statusText.Text = "Monitoring VM State - " .. os.date("%H:%M:%S")
-        end
-        
-        print("Universal Lua State Viewer Started")
-        print("Safe mode: No protected metatable modifications")
-        print("Capturing: Closures, Tables, Modules, Execution Flow")
-    end)
+    print("Starting Universal Lua State Viewer - INTRUSIVE MODE")
+    self:installHooks()
+    self:createGUI()
+    self:takeSnapshot("Initial")
     
-    if not success then
-        warn("Failed to start Universal Lua State Viewer: " .. tostring(err))
-    end
+    print("Intrusive mode activated!")
+    print("Capturing: ALL closures, tables, modules, executions, metatables")
 end
 
 function UniversalLuaStateViewer:stop()
@@ -969,6 +1482,9 @@ function UniversalLuaStateViewer:stop()
     if originalFunctions.loadstring then
         loadstring = originalFunctions.loadstring
     end
+    if originalFunctions.setmetatable then
+        setmetatable = originalFunctions.setmetatable
+    end
     if originalFunctions.require then
         require = originalFunctions.require
     end
@@ -977,20 +1493,12 @@ function UniversalLuaStateViewer:stop()
         self.gui:Destroy()
         self.gui = nil
     end
+    
+    print("Universal Lua State Viewer stopped")
 end
 
 function UniversalLuaStateViewer:getData()
     return state
-end
-
-function UniversalLuaStateViewer:clearData()
-    table.clear(state.closures)
-    table.clear(state.upvalues)
-    table.clear(state.tables)
-    table.clear(state.modules)
-    table.clear(state.metatables)
-    table.clear(state.globals)
-    table.clear(state.execution)
 end
 
 function UniversalLuaStateViewer:getStateSummary()
@@ -1006,12 +1514,10 @@ function UniversalLuaStateViewer:getStateSummary()
 end
 
 -- =========================================
--- AUTO-START THE VIEWER WHEN SCRIPT LOADS
+-- AUTO-START
 -- =========================================
 
--- Create and start the viewer immediately
 local viewer = UniversalLuaStateViewer.new()
 viewer:start()
 
--- Return the viewer instance for manual control
 return viewer
