@@ -1,5 +1,5 @@
--- Universal Lua State Viewer for Roblox - Executor Edition
--- Enhanced with all fixes and optimized for exploit environment
+-- Universal Lua State Viewer for Roblox - Auto-Open Edition
+-- Enhanced with all fixes and auto-opens GUI in PlayerGui
 
 local UniversalLuaStateViewer = {}
 UniversalLuaStateViewer.__index = UniversalLuaStateViewer
@@ -1422,7 +1422,7 @@ function UniversalLuaStateViewer:countTable(tbl)
 end
 
 -- =========================================
--- PROFESSIONAL GUI CREATION (Executor Safe)
+-- PROFESSIONAL GUI CREATION (Auto-Open)
 -- =========================================
 
 function UniversalLuaStateViewer:createGUI()
@@ -1430,7 +1430,7 @@ function UniversalLuaStateViewer:createGUI()
     
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "UniversalLuaStateViewer"
-    screenGui.Parent = game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+    screenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
     
     -- Main Container
     local mainContainer = Instance.new("Frame")
@@ -2045,7 +2045,7 @@ end
 function UniversalLuaStateViewer:start()
     local success, err = pcall(function()
         self:installHooks()
-        self:createGUI()
+        self:createGUI() -- AUTO-OPENS GUI!
         self:takeSnapshot("Initial")
         
         if self.statusText then
@@ -2053,6 +2053,7 @@ function UniversalLuaStateViewer:start()
         end
         
         print("Universal Lua State Viewer Started")
+        print("GUI automatically opened in PlayerGui")
         print("Enhanced features: Circular ref prevention, Complete GUI tabs, Deep copy, Performance optimizations")
     end)
     
@@ -2097,6 +2098,13 @@ function UniversalLuaStateViewer:getStateSummary()
     }
 end
 
--- Initialize and return instance
+-- =========================================
+-- AUTO-START THE VIEWER WHEN SCRIPT LOADS
+-- =========================================
+
+-- Create and start the viewer immediately
 local viewer = UniversalLuaStateViewer.new()
+viewer:start()
+
+-- Return the viewer instance for manual control
 return viewer
